@@ -1,0 +1,19 @@
+# Progress — podcast-mirror (see PRD.md)
+
+## Task list (PRD "Changes to make" + setup)
+- [x] 0. Bootstrap: init standalone git repo in ~/git/rss-mirror-2, copy pipeline verbatim from ~/git/rss-mirror
+- [ ] 1. storage.py — add GitHubStorage (audio/ -> release assets, else local file); keep S3Storage
+- [ ] 2. config.py — github_repo/github_token/release_tag; split base_url into audio_base_url + feed_base_url
+- [ ] 3. verify.py — accept audio/mpeg OR application/octet-stream, log which came back
+- [ ] 4. pipeline.py — add --keep-downloads flag
+- [ ] 5. requirements.txt — boto3 becomes optional extra
+- [ ] 6. .github/workflows/mirror.yml — GITHUB_TOKEN only, commit feed.xml + state/manifest.json back
+- [ ] 7. README.md — rewrite for GitHub hosting
+- [ ] Rollout Stage 1 (manual: create GitHub repo, enable Pages, --max-new 1, submit to YouTube)
+
+## Log
+2026-09-11 — Task 0 done (commit 5af6ce7). `git init -b main`, copied podcast_mirror/, tests/,
+  .github/workflows/mirror.yml, mirror.py, requirements.txt, .gitignore, README.md, .env.example.
+  Skipped dns-snapshot.txt (DNS no longer relevant). Test suite: 31 tests pass (PRD said 25; suite
+  had grown). Notes for later tasks: .gitignore currently ignores `state/` — must un-ignore
+  `state/manifest.json` in task 1/6 since the manifest is now committed to git.
