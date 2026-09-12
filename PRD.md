@@ -153,6 +153,22 @@ the `206`/`Content-Range` range check, and the feed.xml checks (parses as RSS,
 still has `itunes:owner/itunes:email`, one item per manifest entry, every
 `@length` correct).
 
+> **Done (2026-09-11).** `verify.AUDIO_CONTENT_TYPES = ("audio/mpeg",
+> "application/octet-stream")` gates both the HEAD check and the per-item
+> `storage.head()` check. The type seen on each sampled HEAD is recorded in
+> `Checks.audio_content_types` and logged as a `NOTE` line — INFO for
+> `audio/mpeg`, WARNING for octet-stream — so it stands out in the Actions
+> log. `text/plain` still fails. Found and fixed while testing: the stdlib
+> redirect handler rewrites a `HEAD` as a `GET` when following the 302 every
+> release URL returns, so verify was doing full-body GETs it then discarded;
+> `_KeepMethodRedirectHandler` keeps it a HEAD. Tests: new
+> `VerifyOnGitHubTest` runs verify end to end against `FakeGitHub`
+> (octet-stream, 302, HEAD preserved) and `VerifyTest` gains a `text/plain`
+> rejection case. 60 tests pass. Note for task 6 / Stage 1: the feed check
+> still requires `application/rss+xml`; GitHub Pages serves `.xml` as
+> `application/xml`, so that assertion will need relaxing when the workflow
+> is wired up.
+
 ### 4. `podcast_mirror/pipeline.py` — one small addition
 
 Add a `--keep-downloads` flag that skips the `os.unlink(result.path)` after

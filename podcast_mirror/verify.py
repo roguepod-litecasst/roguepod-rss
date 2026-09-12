@@ -1,9 +1,14 @@
-"""Post-publish verification against the live R2 URLs.
+"""Post-publish verification against the live public URLs.
 
 These are assertions, not eyeballing: every check either passes or fails the
 process. They target the public URLs a YouTube fetcher would hit, because the
 original bug was a fetcher-visible one (a cold HEAD returning a 2-byte
 text/plain body) that a local-file check would never have caught.
+
+Audio may come back as ``audio/mpeg`` (R2 fallback) or as
+``application/octet-stream`` (GitHub Releases, which ignores the upload's
+type). Both pass; which one was seen is logged loudly, because that is the
+answer to the PRD's open question.
 """
 
 from __future__ import annotations
@@ -23,6 +28,11 @@ from .storage import GitHubStorage
 
 log = logging.getLogger(__name__)
 
+# What a public audio URL may answer with. GitHub Releases always serves
+# octet-stream; R2/S3 echo the uploaded type. Anything else (text/plain,
+# text/html) is the placeholder/error page this project exists to avoid.
+AUDIO_CONTENT_TYPES = ("audio/mpeg", "application/octet-stream")
+
 
 @dataclass
 class Checks:
@@ -30,6 +40,9 @@ class Checks:
 
     passed: int = 0
     failures: List[str] = field(default_factory=list)
+    # Content-Type seen on each audio HEAD, in sample order. Exposed so the
+    # caller (and tests) can see which of AUDIO_CONTENT_TYPES the host used.
+    audio_content_types: List[str] = field(default_factory=list)
 
     def check(self, ok: bool, description: str, detail: str = "") -> bool:
         if ok:
@@ -41,11 +54,29 @@ class Checks:
         return ok
 
 
+class _KeepMethodRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Follow 30x without downgrading HEAD to GET.
+
+    GitHub release URLs always 302 to the blob store, and the stdlib handler
+    re-issues the redirected request as a GET, which would make the "HEAD
+    returns 200" check a full-body download whose body we then discard.
+    """
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        new = super().redirect_request(req, fp, code, msg, headers, newurl)
+        if new is not None and req.get_method() == "HEAD":
+            new.method = "HEAD"
+        return new
+
+
+_opener = urllib.request.build_opener(_KeepMethodRedirectHandler)
+
+
 def _request(url: str, cfg, method: str = "GET", headers: Optional[dict] = None):
     request = urllib.request.Request(
         url, method=method, headers={"User-Agent": cfg.user_agent, **(headers or {})}
     )
-    return urllib.request.urlopen(request, timeout=cfg.timeout)
+    return _opener.open(request, timeout=cfg.timeout)
 
 
 def verify(cfg, storage=None, sample: int = 3) -> Checks:
@@ -77,11 +108,21 @@ def verify(cfg, storage=None, sample: int = 3) -> Checks:
             continue
 
         checks.check(status == 200, "HEAD returns 200", f"got {status}")
-        checks.check(
-            content_type == "audio/mpeg",
-            "Content-Type is audio/mpeg",
+        checks.audio_content_types.append(content_type)
+        if checks.check(
+            content_type in AUDIO_CONTENT_TYPES,
+            "Content-Type is audio/mpeg or application/octet-stream",
             f"got {content_type!r}",
-        )
+        ):
+            if content_type == "audio/mpeg":
+                log.info("  NOTE  audio served as audio/mpeg")
+            else:
+                log.warning(
+                    "  NOTE  audio served as %s, not audio/mpeg — the host ignores the "
+                    "upload type. YouTube must go by the <enclosure type> attribute "
+                    "and the MP3 bytes; watch whether Stage 1 produces a video.",
+                    content_type,
+                )
         checks.check(
             length is not None and int(length) == episode.length,
             "Content-Length matches the mirrored byte length",
@@ -109,7 +150,7 @@ def verify(cfg, storage=None, sample: int = 3) -> Checks:
         )
         checks.check(len(body) == 1024, "Range body is 1024 bytes", f"got {len(body)}")
 
-    log.info("3. feed.xml parses as RSS 2.0 and every @length matches R2")
+    log.info("3. feed.xml parses as RSS 2.0 and every @length matches the stored object")
     feed_url = cfg.feed_public_url
     try:
         with _request(feed_url, cfg) as resp:
@@ -152,7 +193,7 @@ def verify(cfg, storage=None, sample: int = 3) -> Checks:
         f"feed {len(items)}, manifest {len(episodes)}",
     )
 
-    log.info("   checking %d enclosure(s) against actual R2 object sizes", len(items))
+    log.info("   checking %d enclosure(s) against actual stored object sizes", len(items))
     mismatches = 0
     for item in items:
         title = (item.findtext("title") or "?").strip()
@@ -170,24 +211,24 @@ def verify(cfg, storage=None, sample: int = 3) -> Checks:
         head = storage.head(key)
         declared = enclosure.get("length", "")
         if head is None:
-            checks.check(False, f"item {title!r}: R2 object exists", key)
+            checks.check(False, f"item {title!r}: stored object exists", key)
             mismatches += 1
         elif not declared.isdigit() or int(declared) != head["size"]:
             checks.check(
                 False,
-                f"item {title!r}: @length matches R2 object size",
-                f"@length={declared!r}, R2={head['size']}",
+                f"item {title!r}: @length matches stored object size",
+                f"@length={declared!r}, stored={head['size']}",
             )
             mismatches += 1
-        elif head["content_type"] != "audio/mpeg":
+        elif head["content_type"] not in AUDIO_CONTENT_TYPES:
             checks.check(
-                False, f"item {title!r}: R2 Content-Type", head["content_type"]
+                False, f"item {title!r}: stored Content-Type", head["content_type"]
             )
             mismatches += 1
 
     checks.check(
         mismatches == 0,
-        f"all {len(items)} enclosure @length values match their R2 objects",
+        f"all {len(items)} enclosure @length values match their stored objects",
         f"{mismatches} mismatch(es)",
     )
 

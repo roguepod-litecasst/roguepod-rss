@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import tempfile
 import unittest
 
@@ -13,7 +14,7 @@ from podcast_mirror.errors import (ConfigError, FeedBuildError, ManifestError,
                                     SourceFeedError)
 from podcast_mirror.manifest import Manifest, audio_key
 from podcast_mirror.pipeline import run
-from tests.support import (ITUNES, NOT_MP3, PLACEHOLDER, TINY_AUDIO, FakeWorld)
+from tests.support import (ITUNES, NOT_MP3, PLACEHOLDER, TINY_AUDIO, FakeGitHub, FakeWorld)
 
 EPISODES = [
     {"guid": "aaa111", "title": "Vampire Survivors", "pub_date": "Wed, 02 Sep 2026 09:00:00 GMT",
@@ -398,6 +399,7 @@ class VerifyTest(unittest.TestCase):
         checks = verify_mod.verify(self.cfg, storage=self.world.storage, sample=3)
         self.assertEqual(checks.failures, [])
         self.assertGreaterEqual(checks.passed, 18)
+        self.assertEqual(checks.audio_content_types, ["audio/mpeg"] * 3)
 
     def test_verification_catches_a_length_mismatch(self):
         key = audio_key(self.cfg, "aaa111")
@@ -405,6 +407,53 @@ class VerifyTest(unittest.TestCase):
         self.world.storage.objects[key] = (body[:-100], ctype)  # corrupt the object
         with self.assertRaises(verify_mod.VerificationError) as ctx:
             verify_mod.verify(self.cfg, storage=self.world.storage, sample=3)
+        self.assertIn("length", str(ctx.exception).lower())
+
+    def test_verification_rejects_a_placeholder_content_type(self):
+        # Relaxing to octet-stream must not let Acast's text/plain stub through.
+        key = audio_key(self.cfg, "aaa111")
+        body, _ = self.world.storage.objects[key]
+        self.world.storage.objects[key] = (body, "text/plain")
+        with self.assertRaises(verify_mod.VerificationError) as ctx:
+            verify_mod.verify(self.cfg, storage=self.world.storage, sample=3)
+        self.assertIn("Content-Type", str(ctx.exception))
+        self.assertIn("text/plain", str(ctx.exception))
+
+
+class VerifyOnGitHubTest(unittest.TestCase):
+    """verify.py against a fake GitHub release, which serves octet-stream."""
+
+    def setUp(self):
+        self.world = FakeWorld()
+        self.addCleanup(self.world.stop)
+        self.gh = FakeGitHub()
+        self.addCleanup(self.gh.stop)
+        self.tmp = tempfile.mkdtemp()
+        self.world.publish_source(EPISODES)
+        self.cfg = self.world.config(self.tmp, audio_base_url=f"{self.gh.download_base}/audio")
+        self.storage = self.gh.storage(self.tmp)
+        run(self.cfg, storage=self.storage, backfill=True)
+        # Stand in for Pages: publish the committed feed.xml at feed_base_url.
+        with open(os.path.join(self.tmp, "feed.xml"), "rb") as fh:
+            self.world.storage.objects["feed.xml"] = (fh.read(), "application/rss+xml")
+
+    def test_octet_stream_audio_passes_and_is_recorded(self):
+        with self.assertLogs(verify_mod.log, level="WARNING") as captured:
+            checks = verify_mod.verify(self.cfg, storage=self.storage, sample=3)
+        self.assertEqual(checks.failures, [])
+        self.assertEqual(checks.audio_content_types, ["application/octet-stream"] * 3)
+        self.assertTrue(any("application/octet-stream" in line for line in captured.output))
+        # The HEAD must survive the 302 to the blob store as a HEAD, not a GET.
+        blob_methods = {m for m, p in self.gh.requests if p.startswith("/blob/")}
+        self.assertIn("HEAD", blob_methods)
+        self.assertEqual(len([1 for m, p in self.gh.requests if m == "HEAD" and p.startswith("/blob/")]), 3)
+
+    def test_length_mismatch_still_fails_on_github(self):
+        asset = next(iter(self.gh.assets.values()))
+        asset["body"] = asset["body"][:-100]
+        asset["size"] = len(asset["body"])
+        with self.assertRaises(verify_mod.VerificationError) as ctx:
+            verify_mod.verify(self.cfg, storage=self.storage, sample=3)
         self.assertIn("length", str(ctx.exception).lower())
 
 

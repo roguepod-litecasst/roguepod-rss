@@ -4,7 +4,7 @@
 - [x] 0. Bootstrap: init standalone git repo in ~/git/rss-mirror-2, copy pipeline verbatim from ~/git/rss-mirror
 - [x] 1. storage.py — add GitHubStorage (audio/ -> release assets, else local file); keep S3Storage
 - [x] 2. config.py — github_repo/github_token/release_tag; split base_url into audio_base_url + feed_base_url
-- [ ] 3. verify.py — accept audio/mpeg OR application/octet-stream, log which came back
+- [x] 3. verify.py — accept audio/mpeg OR application/octet-stream, log which came back
 - [ ] 4. pipeline.py — add --keep-downloads flag
 - [ ] 5. requirements.txt — boto3 becomes optional extra
 - [ ] 6. .github/workflows/mirror.yml — GITHUB_TOKEN only, commit feed.xml + state/manifest.json back
@@ -72,3 +72,18 @@
   NEXT: task 3 (verify.py: accept audio/mpeg OR application/octet-stream for audio, log which).
   PipelineOnGitHubTest already serves octet-stream, so a verify test against FakeGitHub is the
   natural check; today VerifyTest only runs against FakeWorld's bucket (audio/mpeg).
+2026-09-11 — Task 3 done. verify.py: AUDIO_CONTENT_TYPES = (audio/mpeg, application/octet-stream)
+  used for both the HEAD check and the per-item storage.head() check; Checks.audio_content_types
+  records what each sampled HEAD returned; a NOTE log line reports it (WARNING for octet-stream).
+  Bonus fix surfaced by the new test: urllib's HTTPRedirectHandler turns HEAD into GET on the 302
+  every GitHub release URL returns, so verify was issuing full-body GETs and dropping them
+  (ConnectionReset noise in the fake server, and against GitHub the HEAD check wasn't a HEAD).
+  Added _KeepMethodRedirectHandler + module-level opener. Tests: VerifyOnGitHubTest (2 tests:
+  octet-stream passes + is logged + blob got 3 real HEADs; length mismatch still fails) and
+  VerifyTest.test_verification_rejects_a_placeholder_content_type. 60 pass, 0 connection errors.
+  pyflakes denied under afk permission mode again (not blocking).
+  FLAG for task 6 / Stage 1: verify still asserts feed.xml Content-Type == application/rss+xml.
+  GitHub Pages serves .xml as application/xml (charset=utf-8), so that check will fail live —
+  relax it (accept application/xml, text/xml, application/rss+xml) when wiring the workflow.
+  NEXT: task 4 (pipeline.py --keep-downloads: skip os.unlink(result.path) after upload; thread
+  through cli.py and Config or a run() kwarg).
