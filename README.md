@@ -98,12 +98,12 @@ Acast feed ──▶ diff against manifest ──▶ GET new enclosures (sequent
 
 ### 1. Repo and Pages
 
-1. Create a **public** repo (`roguepod-litecasst/podcast-mirror`) and push this
+1. Create a **public** repo (`roguepod-litecasst/roguepod-rss`) and push this
    directory to `main`. This directory is meant to be the root of its own
    repository — see the note under *Routine operation* if you nest it.
 2. Settings → Pages → Source: **Deploy from a branch**, branch `main`, folder
    `/ (root)`. The feed URL is then
-   `https://roguepod-litecasst.github.io/podcast-mirror/feed.xml`.
+   `https://roguepod-litecasst.github.io/roguepod-rss/feed.xml`.
 3. Settings → Actions → General → Workflow permissions: **Read and write**
    (the workflow declares `permissions: contents: write`, but the repo setting
    must allow it).
@@ -143,7 +143,7 @@ commitment.
 
 ```bash
 python mirror.py --dry-run                 # see the plan, changes nothing
-python mirror.py --max-new 1               # mirror the newest episode
+python mirror.py --max-new 1               # mirror the oldest unmirrored episode
 git add feed.xml state/manifest.json && git commit -m "Mirror first episode" && git push
 python mirror.py verify                    # after Pages has published
 ```
@@ -288,7 +288,7 @@ derivation from the repo name, and `verify` end to end against the fake.
 ## Pointing YouTube at the feed
 
 Give YouTube the Pages URL,
-`https://roguepod-litecasst.github.io/podcast-mirror/feed.xml`. Ownership
+`https://roguepod-litecasst.github.io/roguepod-rss/feed.xml`. Ownership
 verification uses `<itunes:owner><itunes:email>`, which is copied verbatim from
 the Acast feed (`roguepodlitecast@gmail.com`) — keep that address reachable.
 
