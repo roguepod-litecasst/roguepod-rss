@@ -122,10 +122,10 @@ def verify(cfg, storage=None, sample: int = 3) -> Checks:
             if content_type == "audio/mpeg":
                 log.info("  NOTE  audio served as audio/mpeg")
             else:
-                log.warning(
+                log.info(
                     "  NOTE  audio served as %s, not audio/mpeg — the host ignores the "
-                    "upload type. YouTube must go by the <enclosure type> attribute "
-                    "and the MP3 bytes; watch whether Stage 1 produces a video.",
+                    "upload type. YouTube goes by the <enclosure type> attribute and "
+                    "the MP3 bytes; confirmed working with octet-stream.",
                     content_type,
                 )
         checks.check(

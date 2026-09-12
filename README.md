@@ -52,13 +52,13 @@ per-file cap is 2 GB and episodes are ~45 MB. Verified on a real asset: `HEAD`
 → 302 → `200` with correct `content-length`, `accept-ranges: bytes`, and a `206`
 with `Content-Range` on a range request.
 
-**One known unknown.** GitHub serves release downloads as
+**Content-type, resolved.** GitHub serves release downloads as
 `application/octet-stream` with `content-disposition: attachment`, whatever
-type was used at upload. The `<enclosure type="audio/mpeg">` attribute is still
-correct and MP3 bytes are trivially sniffable, so this very likely doesn't
-matter — but the rollout below tests it with one episode before committing to
-the 2.4 GB backfill. `verify` logs a `NOTE` line with the content-type it saw
-(WARNING level for octet-stream) so the answer is in every Actions log.
+type was used at upload. This was the one open question before the first
+rollout; it turned out not to matter — YouTube ingested the feed and produced
+videos from octet-stream assets (2026-09-12), going by the
+`<enclosure type="audio/mpeg">` attribute and the MP3 bytes. `verify` still
+logs a `NOTE` line with the content-type it saw, for the record.
 
 ## How it works
 
@@ -136,8 +136,9 @@ pip install -r requirements.txt    # lxml only; the GitHub path is stdlib urllib
 
 ## Rollout
 
-Staged deliberately, so the content-type unknown is answered before the 2.4 GB
-commitment.
+Staged deliberately so a problem with the host is caught on one episode
+before the 2.4 GB commitment. (The first rollout is done; this is kept for
+re-doing it against a new repo or a different host.)
 
 ### Stage 1 — one episode, end to end
 
@@ -185,9 +186,11 @@ Acast against the manifest, mirrors anything new, commits and pushes
 `feed.xml` + `state/manifest.json`, waits for Pages to serve the new feed, and
 runs `verify`.
 
-### If Stage 1 fails on content-type
+### If GitHub stops working as a host
 
-Switch `GitHubStorage` → `S3Storage` pointed at Cloudflare R2's free tier
+GitHub's release-asset policy is "no stated limit", not a contractual quota.
+If that ever changes, switch `GitHubStorage` → `S3Storage` pointed at
+Cloudflare R2's free tier
 (10 GB, egress free, the `pub-*.r2.dev` URL needs no custom domain). Still $0;
 needs a card on file. `pip install -r requirements-s3.txt` for boto3, set the
 `STORAGE_*` / `R2_ACCOUNT_ID` variables in `.env.example`, and point
@@ -206,7 +209,7 @@ The workflow: `permissions: contents: write`, no secrets, the 6-hour cron, a
    that did upload is already in the manifest and committing it is what stops
    the next run from re-doing them. A push with `GITHUB_TOKEN` does not trigger
    another run.
-2. Polls the Pages feed URL for up to 5 minutes until its bytes equal the
+2. Polls the Pages feed URL for up to 15 minutes until its bytes equal the
    committed `feed.xml` (Pages publishes asynchronously; without this, verify
    would assert against the previous run's feed).
 3. Runs `python mirror.py verify`.

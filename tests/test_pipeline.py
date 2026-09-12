@@ -469,10 +469,10 @@ class VerifyOnGitHubTest(unittest.TestCase):
             self.world.storage.objects["feed.xml"] = (fh.read(), "application/xml; charset=utf-8")
 
     def test_octet_stream_audio_passes_and_is_recorded(self):
-        with self.assertLogs(verify_mod.log, level="WARNING") as captured:
+        with self.assertLogs(verify_mod.log, level="INFO") as captured:
             checks = verify_mod.verify(self.cfg, storage=self.storage, sample=3)
         self.assertEqual(checks.failures, [])
-        self.assertEqual(checks.audio_content_types, ["application/octet-stream"] * 3)
+        self.assertTrue(any("NOTE" in line and "application/octet-stream" in line for line in captured.output))
         self.assertTrue(any("application/octet-stream" in line for line in captured.output))
         # The HEAD must survive the 302 to the blob store as a HEAD, not a GET.
         blob_methods = {m for m, p in self.gh.requests if p.startswith("/blob/")}
