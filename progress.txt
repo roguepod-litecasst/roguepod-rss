@@ -8,7 +8,7 @@
 - [x] 4. pipeline.py — add --keep-downloads flag
 - [x] 5. requirements.txt — boto3 becomes optional extra
 - [x] 6. .github/workflows/mirror.yml — GITHUB_TOKEN only, commit feed.xml + state/manifest.json back
-- [ ] 7. README.md — rewrite for GitHub hosting
+- [x] 7. README.md — rewrite for GitHub hosting
 - [ ] Rollout Stage 1 (manual: create GitHub repo, enable Pages, --max-new 1, submit to YouTube)
 
 ## Log
@@ -129,3 +129,21 @@
   Pages (deploy from branch main, /), run `python mirror.py --max-new 1` locally or via
   workflow_dispatch, check the Actions log NOTE line for the audio content-type, submit feed to
   YouTube.
+2026-09-11 — Task 7 done. README.md rewritten end to end for GitHub hosting. Kept the "problem this
+  solves" section but fixed a stale claim: the old README said Acast stitches ads per request (so
+  re-downloads differ); the PRD's verification found three downloads byte-identical, so the README
+  now says lengths are simply wrong, not variable. Every claim was checked against the code before
+  writing: release auto-created by _ensure_release (no manual step), downloads/ gitignored,
+  verify samples manifest.ordered() (newest first), FEED/AUDIO content-type tuples, workflow step
+  order and 45-min timeout, flag names in cli.py, .env.example variable names. Added a setup step
+  the PRD didn't mention: Settings -> Actions -> Workflow permissions must be "Read and write" or
+  the job's `permissions: contents: write` is capped at read on some repos. No code changed;
+  63 tests pass.
+  ALL SEVEN PRD TASKS ARE DONE. What remains is manual (Stage 1), and cannot be done by the loop:
+    1. gh repo create roguepod-litecasst/podcast-mirror --public --source . --push
+    2. Settings -> Pages -> Deploy from branch, main, / (root)
+    3. Settings -> Actions -> General -> Workflow permissions -> Read and write
+    4. Either `python mirror.py --max-new 1` locally (needs GITHUB_TOKEN=$(gh auth token)) then
+       commit+push feed.xml and state/manifest.json, or Actions -> Run workflow.
+    5. Read the NOTE line in the verify output for the audio content-type; submit the Pages feed
+       URL to YouTube; wait for the ownership email at roguepodlitecast@gmail.com.

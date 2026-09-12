@@ -227,6 +227,19 @@ Rewrite. The current one is largely Bunny.net setup and DNS instructions that no
 longer apply. Keep the "problem this solves" section — the HEAD/length findings
 are still the reason this exists.
 
+> **Done (2026-09-11).** README rewritten for GitHub hosting: "problem this
+> solves" kept (HEAD placeholder, wrong `@length`), with the old "Acast
+> stitches ads per request" claim corrected to the verified finding that
+> downloads are byte-identical. New sections: where things live (the
+> release/Pages table), the octet-stream known unknown and where `verify`
+> logs the answer, setup (public repo, Pages "deploy from branch", Actions
+> workflow permissions read+write, no secrets), the three rollout stages
+> with exact commands, the R2 fallback path, what the workflow does after
+> the mirror step, full command/flag list, the relaxed verify assertions,
+> the 63-test suite, and recovery notes updated for a git-tracked manifest.
+> All Bunny.net/DNS/S3-secrets material removed. No code changed; 63 tests
+> pass.
+
 ## Rollout
 
 Staged deliberately, so the content-type unknown is answered before the 2.4 GB
