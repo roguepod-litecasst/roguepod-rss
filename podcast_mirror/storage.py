@@ -48,8 +48,14 @@ class S3Storage:
     """Any S3-compatible object store: Bunny, R2, Backblaze, Wasabi, AWS."""
 
     def __init__(self, cfg) -> None:
-        import boto3
-        from botocore.config import Config as BotoConfig
+        try:
+            import boto3
+            from botocore.config import Config as BotoConfig
+        except ImportError as exc:  # pragma: no cover - depends on environment
+            raise StorageError(
+                "S3Storage needs boto3, which is an optional extra: "
+                "pip install -r requirements-s3.txt"
+            ) from exc
 
         cfg.require_credentials()
         self._bucket = cfg.bucket

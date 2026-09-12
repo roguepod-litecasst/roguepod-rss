@@ -186,6 +186,13 @@ later never means re-downloading from Acast. Everything else stays.
 
 Drop `boto3` to an extra (only needed for the R2 fallback); keep `lxml`.
 
+> **Done (2026-09-11).** `requirements.txt` is now `lxml` only;
+> `requirements-s3.txt` (`-r requirements.txt` + `boto3>=1.34`) is the extra
+> for the R2 fallback. `boto3` was already imported lazily inside
+> `S3Storage.__init__`; a missing install now raises `StorageError` naming
+> `requirements-s3.txt` instead of a bare `ImportError`. The workflow's
+> `pip install -r requirements.txt` line needs no change. 62 tests pass.
+
 ### 6. `.github/workflows/mirror.yml`
 
 Rewrite from the existing one: `permissions: contents: write`, no secrets beyond

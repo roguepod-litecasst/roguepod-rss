@@ -6,7 +6,7 @@
 - [x] 2. config.py — github_repo/github_token/release_tag; split base_url into audio_base_url + feed_base_url
 - [x] 3. verify.py — accept audio/mpeg OR application/octet-stream, log which came back
 - [x] 4. pipeline.py — add --keep-downloads flag
-- [ ] 5. requirements.txt — boto3 becomes optional extra
+- [x] 5. requirements.txt — boto3 becomes optional extra
 - [ ] 6. .github/workflows/mirror.yml — GITHUB_TOKEN only, commit feed.xml + state/manifest.json back
 - [ ] 7. README.md — rewrite for GitHub hosting
 - [ ] Rollout Stage 1 (manual: create GitHub repo, enable Pages, --max-new 1, submit to YouTube)
@@ -97,3 +97,13 @@
   NEXT: task 5 (requirements.txt: boto3 -> optional extra, keep lxml). Check storage.py imports
   boto3 lazily inside S3Storage so the GitHub path works without it; cli.py still silences the
   botocore/boto3/s3transfer loggers, which is harmless but could go with the same commit.
+2026-09-11 — Task 5 done. requirements.txt -> lxml only (with a comment pointing at the extra);
+  new requirements-s3.txt (`-r requirements.txt` + boto3>=1.34) for the R2 fallback. boto3 was
+  already lazy-imported inside S3Storage.__init__; wrapped it so a missing install raises
+  StorageError("...pip install -r requirements-s3.txt") rather than ImportError. Left cli.py's
+  botocore/boto3/s3transfer logger silencing in place — harmless without boto3, still wanted if the
+  fallback is ever used. No top-level boto imports anywhere (git grep). 62 tests pass.
+  NEXT: task 6 (.github/workflows/mirror.yml: permissions contents: write, GITHUB_TOKEN only,
+  commit feed.xml + state/manifest.json back after mirror; keep cron/concurrency/dispatch dry-run/
+  verify). Remember the task-3 flag: verify.py's feed Content-Type check must also accept
+  application/xml and text/xml since Pages serves .xml as application/xml.

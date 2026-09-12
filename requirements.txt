@@ -1,2 +1,4 @@
-boto3>=1.34
+# Core dependencies. GitHub hosting (the default) needs only lxml; everything
+# else is stdlib. boto3 is only required for the S3/R2 fallback storage —
+# see requirements-s3.txt.
 lxml>=5.0

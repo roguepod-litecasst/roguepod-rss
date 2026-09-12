@@ -1,0 +1,5 @@
+# Optional extra: only needed if switching from GitHubStorage to S3Storage
+# (the Cloudflare R2 fallback in PRD.md). Install with:
+#   pip install -r requirements.txt -r requirements-s3.txt
+-r requirements.txt
+boto3>=1.34
