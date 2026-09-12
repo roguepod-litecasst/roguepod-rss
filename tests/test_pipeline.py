@@ -1,0 +1,346 @@
+"""End-to-end tests for the mirror pipeline, run against a fake origin+bucket."""
+
+from __future__ import annotations
+
+import tempfile
+import unittest
+
+from lxml import etree as ET
+
+from podcast_mirror import audio, verify as verify_mod
+from podcast_mirror.config import Config
+from podcast_mirror.errors import (ConfigError, FeedBuildError, ManifestError,
+                                    SourceFeedError)
+from podcast_mirror.manifest import Manifest, audio_key
+from podcast_mirror.pipeline import run
+from tests.support import (ITUNES, NOT_MP3, PLACEHOLDER, TINY_AUDIO, FakeWorld)
+
+EPISODES = [
+    {"guid": "aaa111", "title": "Vampire Survivors", "pub_date": "Wed, 02 Sep 2026 09:00:00 GMT",
+     "episode": 50, "size": 1_500_000, "declared_length": 44834272},
+    {"guid": "bbb222", "title": "Hades II", "pub_date": "Wed, 26 Aug 2026 09:00:00 GMT",
+     "episode": 49, "size": 1_600_000, "declared_length": 0},
+    {"guid": "ccc333", "title": "Balatro", "pub_date": "Wed, 19 Aug 2026 09:00:00 GMT",
+     "episode": 48, "size": 1_700_000},
+]
+
+
+class PipelineTest(unittest.TestCase):
+    def setUp(self):
+        self.world = FakeWorld()
+        self.addCleanup(self.world.stop)
+        self.tmp = tempfile.mkdtemp()
+        self.world.publish_source(EPISODES)
+        self.cfg = self.world.config(self.tmp)
+
+    def _run(self, **kwargs):
+        return run(self.cfg, storage=self.world.storage, **kwargs)
+
+    def _feed(self):
+        raw = self.world.storage.get_bytes(self.cfg.feed_key)
+        self.assertIsNotNone(raw, "feed.xml was never uploaded")
+        return ET.fromstring(raw)
+
+    # ---- core behaviour ------------------------------------------------
+
+    def test_backfill_mirrors_everything(self):
+        result = self._run(backfill=True)
+        self.assertEqual(result.exit_code, 0)
+        self.assertEqual(len(result.mirrored), 3)
+        self.assertEqual(result.feed_items, 3)
+        for ep in EPISODES:
+            key = audio_key(self.cfg, ep["guid"])
+            head = self.world.storage.head(key)
+            self.assertIsNotNone(head, f"{ep['title']} missing from bucket")
+            self.assertEqual(head["content_type"], "audio/mpeg")
+            self.assertEqual(head["size"], ep["size"])
+
+    def test_second_run_is_a_noop(self):
+        self._run(backfill=True)
+        self.world.storage.writes.clear()
+        self.world.audio_hits.clear()
+
+        result = self._run()
+
+        self.assertEqual(result.exit_code, 0)
+        self.assertEqual(result.mirrored, [])
+        self.assertEqual(self.world.audio_hits, [], "second run re-downloaded audio")
+        self.assertEqual(
+            self.world.storage.writes, ["feed.xml"],
+            f"second run wrote {self.world.storage.writes}, expected only feed.xml",
+        )
+        self.assertFalse(result.manifest_uploaded)
+
+    def test_manifest_upload_is_reported_when_episodes_mirrored(self):
+        result = self._run(backfill=True)
+        self.assertTrue(
+            result.manifest_uploaded,
+            "mirroring episodes must report the manifest as uploaded",
+        )
+        self.assertIn("manifest.json", self.world.storage.writes)
+
+    def test_length_is_measured_not_trusted(self):
+        """The feed's @length is wrong (or 0); we publish the real byte count."""
+        self._run(backfill=True)
+        manifest = Manifest.load(self.world.storage, self.cfg)
+        for ep in EPISODES:
+            self.assertEqual(manifest.get(ep["guid"]).length, ep["size"])
+
+        for item in self._feed().find("channel").findall("item"):
+            guid = item.findtext("guid")
+            declared = int(item.find("enclosure").get("length"))
+            expected = next(e["size"] for e in EPISODES if e["guid"] == guid)
+            self.assertEqual(declared, expected)
+            self.assertNotEqual(declared, 999)
+
+    def test_feed_enclosure_length_matches_bucket_exactly(self):
+        self._run(backfill=True)
+        for item in self._feed().find("channel").findall("item"):
+            enclosure = item.find("enclosure")
+            key = enclosure.get("url")[len(self.cfg.base_url) + 1:]
+            head = self.world.storage.head(key)
+            self.assertIsNotNone(head, f"no R2 object for {key}")
+            self.assertEqual(int(enclosure.get("length")), head["size"])
+            self.assertEqual(enclosure.get("type"), "audio/mpeg")
+
+    # ---- feed fidelity -------------------------------------------------
+
+    def test_channel_metadata_preserved_verbatim(self):
+        self._run(backfill=True)
+        channel = self._feed().find("channel")
+        self.assertEqual(channel.findtext("title"), "RoguePod LiteCast")
+        self.assertEqual(channel.findtext("language"), "en")
+        self.assertEqual(channel.findtext("description"), "<p>A podcast about roguelikes</p>")
+        self.assertEqual(channel.findtext(f"{{{ITUNES}}}explicit"), "true")
+        self.assertEqual(
+            channel.findtext(f"{{{ITUNES}}}owner/{{{ITUNES}}}email"),
+            "roguepodlitecast@gmail.com",
+        )
+        self.assertEqual(channel.find(f"{{{ITUNES}}}category").get("text"), "Leisure")
+        self.assertEqual(channel.find(f"{{{ITUNES}}}image").get("href"), "https://example.test/art.jpg")
+        self.assertEqual(channel.findtext("image/url"), "https://example.test/art.jpg")
+
+    def test_item_metadata_preserved(self):
+        self._run(backfill=True)
+        item = self._feed().find("channel").find("item")
+        self.assertEqual(item.findtext("title"), "Vampire Survivors")
+        self.assertEqual(item.findtext("pubDate"), "Wed, 02 Sep 2026 09:00:00 GMT")
+        self.assertEqual(item.findtext(f"{{{ITUNES}}}duration"), "1:02:03")
+        self.assertEqual(item.findtext(f"{{{ITUNES}}}episode"), "50")
+        self.assertEqual(item.findtext(f"{{{ITUNES}}}season"), "1")
+        self.assertEqual(item.find(f"{{{ITUNES}}}image").get("href"), "https://example.test/ep.jpg")
+        self.assertEqual(item.find("guid").get("isPermaLink"), "false")
+
+    def test_items_are_newest_first(self):
+        self._run(backfill=True)
+        titles = [i.findtext("title") for i in self._feed().find("channel").findall("item")]
+        self.assertEqual(titles, ["Vampire Survivors", "Hades II", "Balatro"])
+
+    def test_self_link_points_at_the_mirror(self):
+        self._run(backfill=True)
+        link = self._feed().find("channel").find("{http://www.w3.org/2005/Atom}link")
+        self.assertEqual(link.get("href"), self.cfg.feed_public_url)
+
+    def test_rss_is_valid_2_0(self):
+        self._run(backfill=True)
+        root = self._feed()
+        self.assertEqual(ET.QName(root).localname, "rss")
+        self.assertEqual(root.get("version"), "2.0")
+
+    # ---- durability ----------------------------------------------------
+
+    def test_episode_dropped_from_source_stays_in_feed(self):
+        self._run(backfill=True)
+        # Acast drops the newest episode from the feed.
+        self.world.publish_source(EPISODES[1:])
+        result = self._run()
+        self.assertEqual(result.exit_code, 0)
+        titles = [i.findtext("title") for i in self._feed().find("channel").findall("item")]
+        self.assertIn("Vampire Survivors", titles)
+        self.assertEqual(len(titles), 3)
+
+    def test_source_edits_propagate_without_redownload(self):
+        self._run(backfill=True)
+        self.world.audio_hits.clear()
+        edited = [dict(e) for e in EPISODES]
+        edited[0]["description"] = "<p>Corrected show notes</p>"
+        self.world.publish_source(edited)
+
+        result = self._run()
+        self.assertEqual(self.world.audio_hits, [])
+        self.assertTrue(result.manifest_uploaded)
+        item = self._feed().find("channel").find("item")
+        self.assertEqual(item.findtext("description"), "<p>Corrected show notes</p>")
+
+    # ---- failure handling ----------------------------------------------
+
+    def test_placeholder_response_is_a_hard_failure(self):
+        """The exact sphinx failure mode: 200 text/plain, tiny body."""
+        self.world.modes["bbb222"] = PLACEHOLDER
+        result = self._run(backfill=True)
+        self.assertEqual(result.exit_code, 1)
+        self.assertEqual(result.failed, ["Hades II"])
+        titles = [i.findtext("title") for i in self._feed().find("channel").findall("item")]
+        self.assertNotIn("Hades II", titles, "failed episode must be omitted, not broken")
+        self.assertEqual(titles, ["Vampire Survivors", "Balatro"])
+
+    def test_too_small_body_rejected(self):
+        self.world.modes["ccc333"] = TINY_AUDIO
+        result = self._run(backfill=True)
+        self.assertEqual(result.exit_code, 1)
+        self.assertEqual(result.failed, ["Balatro"])
+        self.assertIsNone(self.world.storage.head(audio_key(self.cfg, "ccc333")))
+
+    def test_non_mp3_body_rejected(self):
+        self.world.modes["aaa111"] = NOT_MP3
+        result = self._run(backfill=True)
+        self.assertEqual(result.exit_code, 1)
+        self.assertEqual(result.failed, ["Vampire Survivors"])
+
+    def test_failed_episode_retried_next_run(self):
+        self.world.modes["bbb222"] = PLACEHOLDER
+        self.assertEqual(self._run(backfill=True).exit_code, 1)
+        self.world.modes.pop("bbb222")
+        result = self._run(backfill=True)
+        self.assertEqual(result.exit_code, 0)
+        self.assertEqual(result.mirrored, ["Hades II"])
+        self.assertEqual(result.feed_items, 3)
+
+    # ---- flags ---------------------------------------------------------
+
+    def test_dry_run_touches_nothing(self):
+        result = self._run(dry_run=True, backfill=True)
+        self.assertEqual(result.exit_code, 0)
+        self.assertEqual(result.feed_items, 3)
+        self.assertEqual(self.world.storage.objects, {})
+        self.assertEqual(self.world.audio_hits, [])
+        self.assertFalse(result.feed_uploaded)
+
+    def test_max_new_defers_the_rest(self):
+        self.cfg.max_new = 2
+        result = self._run()
+        self.assertEqual(len(result.mirrored), 2)
+        self.assertEqual(len(result.deferred), 1)
+        self.assertEqual(result.exit_code, 0)
+        # Oldest first, so the backlog drains chronologically.
+        self.assertEqual(result.mirrored, ["Balatro", "Hades II"])
+
+    def test_keys_are_stable_and_derived_from_guid(self):
+        key = audio_key(self.cfg, "aaa111")
+        self.assertEqual(key, audio_key(self.cfg, "aaa111"))
+        self.assertTrue(key.startswith("audio/aaa111-"))
+        self.assertTrue(key.endswith(".mp3"))
+        weird = audio_key(self.cfg, "https://acast.com/ep?id=1 2/3")
+        self.assertNotIn("/", weird[len("audio/"):])
+
+    # ---- unit-level guards ---------------------------------------------
+
+    def test_mp3_sniffing(self):
+        self.assertTrue(audio.looks_like_mp3(b"ID3\x03"))
+        self.assertTrue(audio.looks_like_mp3(b"\xff\xfb\x90\x00"))
+        self.assertFalse(audio.looks_like_mp3(b"ok"))
+        self.assertFalse(audio.looks_like_mp3(b"<htm"))
+        # 0xFF 0xFF is a legitimate MPEG1 Layer I header, so it must pass.
+        self.assertTrue(audio.looks_like_mp3(b"\xff\xff\x00\x00"))
+        self.assertFalse(audio.looks_like_mp3(b"\xff\xef\x00\x00"))  # reserved version
+        self.assertFalse(audio.looks_like_mp3(b"\xff\xf9\x00\x00"))  # reserved layer
+
+
+class ErrorPathTest(unittest.TestCase):
+    """Failure modes must be loud and specific, never a raw traceback."""
+
+    def setUp(self):
+        self.world = FakeWorld()
+        self.addCleanup(self.world.stop)
+        self.tmp = tempfile.mkdtemp()
+        self.world.publish_source(EPISODES)
+        self.cfg = self.world.config(self.tmp)
+
+    def test_corrupt_manifest_reports_clearly(self):
+        run(self.cfg, storage=self.world.storage, backfill=True)
+        self.world.storage.put_bytes("manifest.json", b"{not json", "application/json")
+        with self.assertRaises(ManifestError) as ctx:
+            run(self.cfg, storage=self.world.storage)
+        self.assertIn("unreadable", str(ctx.exception))
+        self.assertIn("--backfill", str(ctx.exception))
+
+    def test_missing_archived_xml_is_loud(self):
+        run(self.cfg, storage=self.world.storage, backfill=True)
+        manifest = Manifest.load(self.world.storage, self.cfg)
+        manifest.get("aaa111").item_xml = ""
+        manifest.save(self.world.storage, self.cfg)
+        # Acast drops that episode, so the archived copy is the only source.
+        self.world.publish_source(EPISODES[1:])
+        with self.assertRaises(FeedBuildError) as ctx:
+            run(self.cfg, storage=self.world.storage)
+        self.assertIn("Vampire Survivors", str(ctx.exception))
+
+    def test_unreachable_source_feed_is_a_config_grade_error(self):
+        self.cfg.feed_url = "http://127.0.0.1:1/nope.xml"
+        with self.assertRaises(SourceFeedError):
+            run(self.cfg, storage=self.world.storage)
+
+
+class EndpointConfigTest(unittest.TestCase):
+    """The storage backend must work against any S3-compatible provider."""
+
+    def test_explicit_endpoint_wins(self):
+        cfg = Config(feed_url="f", bucket="b", base_url="https://x.test",
+                     endpoint="https://la-s3.storage.bunnycdn.com", account_id="acct")
+        self.assertEqual(cfg.endpoint_url, "https://la-s3.storage.bunnycdn.com")
+
+    def test_endpoint_trailing_slash_stripped(self):
+        cfg = Config(feed_url="f", bucket="b", base_url="https://x.test",
+                     endpoint="https://la-s3.storage.bunnycdn.com/")
+        self.assertEqual(cfg.endpoint_url, "https://la-s3.storage.bunnycdn.com")
+
+    def test_falls_back_to_r2_from_account_id(self):
+        cfg = Config(feed_url="f", bucket="b", base_url="https://x.test", account_id="acct123")
+        self.assertEqual(cfg.endpoint_url, "https://acct123.r2.cloudflarestorage.com")
+
+    def test_no_endpoint_is_a_clear_config_error(self):
+        cfg = Config(feed_url="f", bucket="b", base_url="https://x.test")
+        with self.assertRaises(ConfigError) as ctx:
+            cfg.endpoint_url
+        self.assertIn("STORAGE_ENDPOINT_URL", str(ctx.exception))
+
+    def test_missing_credentials_named_precisely(self):
+        cfg = Config(feed_url="f", bucket="b", base_url="https://x.test",
+                     endpoint="https://la-s3.storage.bunnycdn.com")
+        with self.assertRaises(ConfigError) as ctx:
+            cfg.require_credentials()
+        self.assertIn("STORAGE_ACCESS_KEY_ID", str(ctx.exception))
+
+    def test_credentials_stay_out_of_repr(self):
+        cfg = Config(feed_url="f", bucket="b", base_url="https://x.test",
+                     access_key_id="zone-name", secret_access_key="SUPERSECRET")
+        self.assertNotIn("SUPERSECRET", repr(cfg))
+
+
+class VerifyTest(unittest.TestCase):
+    """Exercises verify.py against the fake bucket served over real HTTP."""
+
+    def setUp(self):
+        self.world = FakeWorld()
+        self.addCleanup(self.world.stop)
+        self.tmp = tempfile.mkdtemp()
+        self.world.publish_source(EPISODES)
+        self.cfg = self.world.config(self.tmp)
+        run(self.cfg, storage=self.world.storage, backfill=True)
+
+    def test_verification_passes_on_a_healthy_mirror(self):
+        checks = verify_mod.verify(self.cfg, storage=self.world.storage, sample=3)
+        self.assertEqual(checks.failures, [])
+        self.assertGreaterEqual(checks.passed, 18)
+
+    def test_verification_catches_a_length_mismatch(self):
+        key = audio_key(self.cfg, "aaa111")
+        body, ctype = self.world.storage.objects[key]
+        self.world.storage.objects[key] = (body[:-100], ctype)  # corrupt the object
+        with self.assertRaises(verify_mod.VerificationError) as ctx:
+            verify_mod.verify(self.cfg, storage=self.world.storage, sample=3)
+        self.assertIn("length", str(ctx.exception).lower())
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)
