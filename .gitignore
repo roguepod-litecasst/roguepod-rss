@@ -1,4 +1,6 @@
-state/
+# The manifest is committed (it is the feed's source of truth); scratch files are not.
+state/*
+!state/manifest.json
 downloads/
 __pycache__/
 *.pyc

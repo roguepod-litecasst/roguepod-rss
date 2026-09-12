@@ -102,6 +102,20 @@ so **`pipeline.py` and `manifest.py` need no changes at all**:
 Keep `S3Storage` in the file. It is the R2 fallback if the content-type gamble
 loses, and deleting it would mean rewriting it.
 
+> **Done (2026-09-11).** `GitHubStorage(repo, token, *, release_tag, audio_prefix,
+> local_dir, api_base, upload_base, ...)` plus `GitHubStorage.from_config(cfg)`,
+> stdlib-only. Asset listing uses the paginated `/releases/{id}/assets` endpoint;
+> uploads stream the file, delete any same-named asset first, and retry 5xx
+> three times. Local keys are written atomically (tempfile + `os.replace`) and
+> refuse to escape `local_dir`. New `StorageError` in `errors.py`. Tests:
+> `tests/test_github_storage.py` (16 tests) against a `FakeGitHub` in
+> `tests/support.py` that serves downloads as `application/octet-stream` +
+> `content-disposition: attachment`, like the real thing. `.gitignore` now
+> tracks `state/manifest.json`. Wiring as the pipeline default and the config
+> fields `from_config` reads are task 2; that task should also set
+> `manifest_key = "state/manifest.json"` so `Manifest.save`'s local write and
+> the storage write land on the same file.
+
 ### 2. `podcast_mirror/config.py` — two base URLs, no credentials
 
 - Drop the S3 fields and `endpoint_url` derivation from the required path.
@@ -110,6 +124,24 @@ loses, and deleting it would mean rewriting it.
 - Split `base_url` into `audio_base_url` and `feed_base_url`; make
   `public_url(key)` route on the `audio/` prefix and `feed_public_url` use the
   Pages URL. This is the one place the two-host split is expressed.
+
+> **Done (2026-09-11).** `Config` now takes `github_repo`, `github_token`
+> (excluded from `repr`), `release_tag`, `audio_base_url`, `feed_base_url`;
+> the two base URLs derive from the repo in `__post_init__`
+> (`github.com/<repo>/releases/download/<tag>` and
+> `<owner>.github.io/<name>`) and can be overridden via
+> `AUDIO_PUBLIC_BASE_URL` / `FEED_PUBLIC_BASE_URL` or `--audio-base-url` /
+> `--feed-base-url` — that override is how the R2 fallback would be pointed.
+> `public_url()` routes audio keys to the release by basename and everything
+> else to Pages at its path; `key_for_url()` is the inverse, used by
+> `verify.py` instead of string-slicing `base_url`. `manifest_key` defaults
+> to `state/manifest.json`. `pipeline.py` and `verify.py` default to
+> `GitHubStorage.from_config(cfg)`. CLI: `--bucket`/`--base-url` replaced by
+> `--repo`, `--release-tag`, `--audio-base-url`, `--feed-base-url`.
+> `S3Storage` config (`bucket`, endpoint, S3 creds) kept as optional fields;
+> `require_credentials` now also names `STORAGE_BUCKET`. `.env.example`
+> rewritten. Tests: 57 pass (10 new in `PublicUrlConfigTest`). Also fixed a
+> task-1 bug in `FakeGitHub`'s download route that 404'd every redirect.
 
 ### 3. `podcast_mirror/verify.py` — accept octet-stream for audio
 

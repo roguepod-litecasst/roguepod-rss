@@ -79,7 +79,7 @@ class Manifest:
     def load(cls, storage, cfg) -> "Manifest":
         raw = storage.get_bytes(cfg.manifest_key)
         if raw is None:
-            log.info("No manifest in R2 at %s; starting a new one.", cfg.manifest_key)
+            log.info("No manifest at %s; starting a new one.", cfg.manifest_key)
             manifest = cls()
             manifest._baseline = manifest._episodes_blob()
             return manifest
@@ -92,8 +92,8 @@ class Manifest:
             }
         except (ValueError, TypeError) as exc:
             raise ManifestError(
-                f"Manifest at r2://{cfg.bucket}/{cfg.manifest_key} is unreadable: {exc}. "
-                f"Restore it from {cfg.state_dir}/ or re-run with --backfill."
+                f"Manifest at {cfg.manifest_key} is unreadable: {exc}. "
+                f"Restore it from git history or re-run with --backfill."
             ) from exc
         manifest = cls(episodes=episodes, updated_at=data.get("updated_at", ""))
         manifest._baseline = manifest._episodes_blob()

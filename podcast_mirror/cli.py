@@ -17,15 +17,23 @@ COMMANDS = ("mirror", "verify")
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="mirror.py",
-        description="Mirror a podcast feed's audio to Cloudflare R2 and publish "
-                    "a static RSS feed with true byte lengths, for YouTube ingestion.",
+        description="Mirror a podcast feed's audio to GitHub Releases and publish "
+                    "a static RSS feed with true byte lengths on GitHub Pages, "
+                    "for YouTube ingestion.",
     )
     sub = parser.add_subparsers(dest="command")
 
     def common(p):
         p.add_argument("--feed-url", help="Source RSS feed (default: $PODCAST_FEED_URL)")
-        p.add_argument("--bucket", help="R2 bucket (default: $R2_BUCKET)")
-        p.add_argument("--base-url", help="Public base URL (default: $R2_PUBLIC_BASE_URL)")
+        p.add_argument("--repo", help="GitHub owner/name (default: $GITHUB_REPOSITORY)")
+        p.add_argument("--release-tag",
+                       help="Release that holds the audio assets (default: $RELEASE_TAG or 'audio')")
+        p.add_argument("--audio-base-url",
+                       help="Override the public audio URL prefix "
+                            "(default: $AUDIO_PUBLIC_BASE_URL, else derived from --repo)")
+        p.add_argument("--feed-base-url",
+                       help="Override the public feed URL prefix "
+                            "(default: $FEED_PUBLIC_BASE_URL, else the repo's Pages URL)")
         p.add_argument("--state-dir", help="Local manifest cache directory")
         p.add_argument("-v", "--verbose", action="store_true", help="Debug logging")
 

@@ -14,7 +14,7 @@ from .errors import DownloadError, MirrorError
 from .feedgen import build_feed
 from .manifest import Episode, Manifest, audio_key
 from .source import SourceItem, load_source
-from .storage import S3Storage
+from .storage import GitHubStorage
 
 log = logging.getLogger(__name__)
 
@@ -36,7 +36,7 @@ class RunResult:
 def _mirror_one(item: SourceItem, cfg, storage, manifest: Manifest) -> Episode:
     """Download, validate, upload, and record one episode.
 
-    The manifest is written only after the audio object is in R2, so an
+    The manifest is written only after the audio object is in storage, so an
     interrupted run never claims an episode it did not actually mirror.
     """
     key = audio_key(cfg, item.guid)
@@ -55,13 +55,13 @@ def _mirror_one(item: SourceItem, cfg, storage, manifest: Manifest) -> Episode:
                 f"{declared:,}", f"{result.length:,}",
             )
 
-    log.info("  uploading to r2://%s/%s", cfg.bucket, key)
+    log.info("  uploading %s -> %s", key, cfg.public_url(key))
     storage.put_file(result.path, key, "audio/mpeg")
 
     head = storage.head(key)
     if head is None or head["size"] != result.length:
         got = "missing" if head is None else f"{head['size']} bytes"
-        raise DownloadError(item.title, f"post-upload check failed: R2 object is {got}")
+        raise DownloadError(item.title, f"post-upload check failed: stored object is {got}")
 
     episode = Episode(
         guid=item.guid,
@@ -89,7 +89,7 @@ def _mirror_one(item: SourceItem, cfg, storage, manifest: Manifest) -> Episode:
 
 def run(cfg, *, dry_run: bool = False, backfill: bool = False, storage=None) -> RunResult:
     """Execute one mirror pass."""
-    storage = storage if storage is not None else S3Storage(cfg)
+    storage = storage if storage is not None else GitHubStorage.from_config(cfg)
     feed = load_source(cfg)
     manifest = Manifest.load(storage, cfg)
 

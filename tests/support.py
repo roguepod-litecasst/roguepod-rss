@@ -1,4 +1,5 @@
-"""Test scaffolding: a fake Acast origin and a fake public bucket, over real HTTP.
+"""Test scaffolding: a fake Acast origin, a fake public bucket, and a fake
+GitHub Releases API, all over real HTTP.
 
 The pipeline is exercised end to end through actual sockets so the download,
 validation, range and Content-Type behaviour under test is the real code path,
@@ -7,7 +8,9 @@ not a mock of it.
 
 from __future__ import annotations
 
+import json
 import threading
+import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from lxml import etree as ET
@@ -178,10 +181,14 @@ class FakeWorld:
         self.feed_bytes = build_source_feed(episodes, self.origin_base)
 
     def config(self, tmpdir, **overrides):
-        cfg = Config(
+        # Both public hosts point at the fake bucket unless a test overrides
+        # them (PipelineOnGitHubTest points audio at a FakeGitHub instead).
+        fields = dict(
             feed_url=f"{self.origin_base}/feed.xml",
-            bucket="test-bucket",
-            base_url=self.bucket_base,
+            github_repo="roguepod-litecasst/podcast-mirror",
+            github_token="ghp_test_token",
+            audio_base_url=f"{self.bucket_base}/audio",
+            feed_base_url=self.bucket_base,
             state_dir=f"{tmpdir}/state",
             download_dir=f"{tmpdir}/downloads",
             delay=0.0,
@@ -189,9 +196,209 @@ class FakeWorld:
             retries=1,
             max_new=0,
         )
-        for key, value in overrides.items():
-            setattr(cfg, key, value)
-        return cfg
+        fields.update(overrides)
+        return Config(**fields)
+
+    def stop(self):
+        self.server.shutdown()
+        self.server.server_close()
+
+
+class FakeGitHub:
+    """Just enough of the GitHub Releases API for GitHubStorage, over real HTTP.
+
+    Mirrors the behaviours that matter: the release does not exist until
+    created, asset listings paginate, duplicate asset names are rejected,
+    downloads 302 to a blob served as application/octet-stream with
+    content-disposition: attachment (which is what GitHub really does, and
+    the open question in the PRD).
+    """
+
+    TOKEN = "ghp_test_token"
+
+    def __init__(self, repo="roguepod-litecasst/podcast-mirror"):
+        self.repo = repo
+        self.release = None       # release dict or None
+        self.assets = {}          # asset id -> {"name", "size", "content_type", "body"}
+        self.requests = []        # (method, path) for every API call
+        self.fail_next_upload = 0  # count of uploads to answer with 502
+        self._next_id = 100
+        self._lock = threading.Lock()
+
+        gh = self
+
+        class Handler(BaseHTTPRequestHandler):
+            protocol_version = "HTTP/1.1"
+
+            def log_message(self, *args):
+                pass
+
+            def _json(self, code, payload=None):
+                body = b"" if payload is None else json.dumps(payload).encode()
+                self.send_response(code)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                if self.command != "HEAD":
+                    self.wfile.write(body)
+
+            def _asset_json(self, asset_id):
+                a = gh.assets[asset_id]
+                return {
+                    "id": asset_id,
+                    "name": a["name"],
+                    "size": a["size"],
+                    "content_type": a["content_type"],
+                    "state": "uploaded",
+                    "browser_download_url": f"{gh.base}/download/{gh.release['tag_name']}/{a['name']}",
+                }
+
+            def _release_json(self):
+                r = dict(gh.release)
+                r["assets"] = [self._asset_json(i) for i in sorted(gh.assets)]
+                return r
+
+            def _authed(self):
+                return self.headers.get("Authorization") == f"Bearer {gh.TOKEN}"
+
+            def _blob(self, name, head_only):
+                match = [a for a in gh.assets.values() if a["name"] == name]
+                if not match:
+                    return self._json(404, {"message": "Not Found"})
+                body = match[0]["body"]
+                rng = self.headers.get("Range")
+                if rng and rng.startswith("bytes="):
+                    start, _, end = rng[len("bytes="):].partition("-")
+                    start = int(start or 0)
+                    end = min(int(end) if end else len(body) - 1, len(body) - 1)
+                    chunk = body[start:end + 1]
+                    self.send_response(206)
+                    self.send_header("Content-Range", f"bytes {start}-{end}/{len(body)}")
+                    body = chunk
+                else:
+                    self.send_response(200)
+                # Exactly what GitHub serves, regardless of the upload's type.
+                self.send_header("Content-Type", "application/octet-stream")
+                self.send_header("Content-Disposition", f"attachment; filename={name}")
+                self.send_header("Accept-Ranges", "bytes")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                if not head_only:
+                    self.wfile.write(body)
+
+            def _route(self, head_only=False):
+                parsed = urllib.parse.urlsplit(self.path)
+                path, query = parsed.path, urllib.parse.parse_qs(parsed.query)
+                gh.requests.append((self.command, path))
+                prefix = f"/repos/{gh.repo}/releases"
+
+                # Public download URL: 302 to the blob, like github.com does.
+                if path.startswith("/download/"):
+                    tag, _, name = path[len("/download/"):].partition("/")
+                    if gh.release is None or tag != gh.release["tag_name"]:
+                        return self._json(404, {"message": "Not Found"})
+                    self.send_response(302)
+                    self.send_header("Location", f"{gh.base}/blob/{name}")
+                    self.send_header("Content-Length", "0")
+                    self.end_headers()
+                    return None
+                if path.startswith("/blob/"):
+                    return self._blob(path[len("/blob/"):], head_only)
+
+                if not self._authed():
+                    return self._json(401, {"message": "Bad credentials"})
+
+                if self.command == "GET" and path.startswith(f"{prefix}/tags/"):
+                    tag = urllib.parse.unquote(path[len(f"{prefix}/tags/"):])
+                    if gh.release is None or gh.release["tag_name"] != tag:
+                        return self._json(404, {"message": "Not Found"})
+                    return self._json(200, self._release_json())
+
+                if self.command == "POST" and path == prefix:
+                    length = int(self.headers.get("Content-Length", 0))
+                    payload = json.loads(self.rfile.read(length))
+                    with gh._lock:
+                        if gh.release is not None:
+                            return self._json(422, {"message": "Validation Failed"})
+                        gh.release = {"id": 1, "tag_name": payload["tag_name"],
+                                      "name": payload.get("name", "")}
+                    return self._json(201, self._release_json())
+
+                if gh.release is not None and self.command == "GET" \
+                        and path == f"{prefix}/{gh.release['id']}/assets":
+                    per_page = min(int(query.get("per_page", ["30"])[0]), 100)
+                    page = int(query.get("page", ["1"])[0])
+                    ids = sorted(gh.assets)[(page - 1) * per_page: page * per_page]
+                    return self._json(200, [self._asset_json(i) for i in ids])
+
+                if self.command == "DELETE" and path.startswith(f"{prefix}/assets/"):
+                    asset_id = int(path.rsplit("/", 1)[1])
+                    with gh._lock:
+                        if asset_id not in gh.assets:
+                            return self._json(404, {"message": "Not Found"})
+                        del gh.assets[asset_id]
+                    return self._json(204)
+
+                if gh.release is not None and self.command == "POST" \
+                        and path == f"/upload{prefix}/{gh.release['id']}/assets":
+                    name = query.get("name", [""])[0]
+                    length = int(self.headers.get("Content-Length", 0))
+                    body = self.rfile.read(length)
+                    with gh._lock:
+                        if gh.fail_next_upload:
+                            gh.fail_next_upload -= 1
+                            return self._json(502, {"message": "Server Error"})
+                        if any(a["name"] == name for a in gh.assets.values()):
+                            return self._json(422, {"message": "Validation Failed",
+                                                    "errors": [{"code": "already_exists"}]})
+                        asset_id = gh._next_id
+                        gh._next_id += 1
+                        gh.assets[asset_id] = {
+                            "name": name, "size": len(body), "body": body,
+                            "content_type": self.headers.get("Content-Type", ""),
+                        }
+                    return self._json(201, self._asset_json(asset_id))
+
+                return self._json(404, {"message": "Not Found"})
+
+            def do_GET(self):
+                self._route()
+
+            def do_HEAD(self):
+                self._route(head_only=True)
+
+            def do_POST(self):
+                self._route()
+
+            def do_DELETE(self):
+                self._route()
+
+        self.server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        self.port = self.server.server_address[1]
+        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+        self.thread.start()
+
+    @property
+    def base(self):
+        return f"http://127.0.0.1:{self.port}"
+
+    @property
+    def download_base(self):
+        """Stands in for github.com/<repo>/releases/download."""
+        return f"{self.base}/download"
+
+    def storage(self, local_dir, **overrides):
+        from podcast_mirror.storage import GitHubStorage
+
+        kwargs = dict(
+            release_tag="audio",
+            local_dir=local_dir,
+            api_base=self.base,
+            upload_base=f"{self.base}/upload",
+            timeout=15.0,
+        )
+        kwargs.update(overrides)
+        return GitHubStorage(self.repo, self.TOKEN, **kwargs)
 
     def stop(self):
         self.server.shutdown()

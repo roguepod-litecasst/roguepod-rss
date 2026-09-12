@@ -19,7 +19,7 @@ from lxml import etree as ET
 from .errors import VerificationError
 from .manifest import Manifest
 from .source import ITUNES
-from .storage import S3Storage
+from .storage import GitHubStorage
 
 log = logging.getLogger(__name__)
 
@@ -50,7 +50,7 @@ def _request(url: str, cfg, method: str = "GET", headers: Optional[dict] = None)
 
 def verify(cfg, storage=None, sample: int = 3) -> Checks:
     """Run every verification. Raises VerificationError if any check fails."""
-    storage = storage if storage is not None else S3Storage(cfg)
+    storage = storage if storage is not None else GitHubStorage.from_config(cfg)
     checks = Checks()
     manifest = Manifest.load(storage, cfg)
     if not len(manifest):
@@ -162,11 +162,11 @@ def verify(cfg, storage=None, sample: int = 3) -> Checks:
             mismatches += 1
             continue
         url = enclosure.get("url", "")
-        if not url.startswith(cfg.base_url.rstrip("/")):
+        key = cfg.key_for_url(url)
+        if key is None:
             checks.check(False, f"item {title!r} enclosure points at the mirror", url)
             mismatches += 1
             continue
-        key = url[len(cfg.base_url.rstrip("/")) + 1:]
         head = storage.head(key)
         declared = enclosure.get("length", "")
         if head is None:

@@ -77,7 +77,7 @@ class PipelineTest(unittest.TestCase):
             result.manifest_uploaded,
             "mirroring episodes must report the manifest as uploaded",
         )
-        self.assertIn("manifest.json", self.world.storage.writes)
+        self.assertIn(self.cfg.manifest_key, self.world.storage.writes)
 
     def test_length_is_measured_not_trusted(self):
         """The feed's @length is wrong (or 0); we publish the real byte count."""
@@ -97,9 +97,10 @@ class PipelineTest(unittest.TestCase):
         self._run(backfill=True)
         for item in self._feed().find("channel").findall("item"):
             enclosure = item.find("enclosure")
-            key = enclosure.get("url")[len(self.cfg.base_url) + 1:]
+            key = self.cfg.key_for_url(enclosure.get("url"))
+            self.assertIsNotNone(key, f"enclosure {enclosure.get('url')} is not on the mirror")
             head = self.world.storage.head(key)
-            self.assertIsNotNone(head, f"no R2 object for {key}")
+            self.assertIsNotNone(head, f"no stored object for {key}")
             self.assertEqual(int(enclosure.get("length")), head["size"])
             self.assertEqual(enclosure.get("type"), "audio/mpeg")
 
@@ -258,7 +259,7 @@ class ErrorPathTest(unittest.TestCase):
 
     def test_corrupt_manifest_reports_clearly(self):
         run(self.cfg, storage=self.world.storage, backfill=True)
-        self.world.storage.put_bytes("manifest.json", b"{not json", "application/json")
+        self.world.storage.put_bytes(self.cfg.manifest_key, b"{not json", "application/json")
         with self.assertRaises(ManifestError) as ctx:
             run(self.cfg, storage=self.world.storage)
         self.assertIn("unreadable", str(ctx.exception))
@@ -281,38 +282,103 @@ class ErrorPathTest(unittest.TestCase):
             run(self.cfg, storage=self.world.storage)
 
 
+class PublicUrlConfigTest(unittest.TestCase):
+    """Audio and feed live on different hosts; config.py owns that split."""
+
+    REPO = "RoguePod-LiteCasst/podcast-mirror"
+
+    def test_urls_derive_from_the_repository(self):
+        cfg = Config(feed_url="f", github_repo=self.REPO)
+        self.assertEqual(
+            cfg.audio_base_url,
+            "https://github.com/RoguePod-LiteCasst/podcast-mirror/releases/download/audio",
+        )
+        # Pages hostnames are lowercase, whatever case the owner was typed in.
+        self.assertEqual(cfg.feed_base_url, "https://roguepod-litecasst.github.io/podcast-mirror")
+
+    def test_audio_keys_route_to_release_assets_by_basename(self):
+        cfg = Config(feed_url="f", github_repo=self.REPO)
+        self.assertEqual(
+            cfg.public_url("audio/ep-abc123.mp3"),
+            "https://github.com/RoguePod-LiteCasst/podcast-mirror/releases/download/audio/ep-abc123.mp3",
+        )
+
+    def test_other_keys_route_to_pages_at_their_path(self):
+        cfg = Config(feed_url="f", github_repo=self.REPO)
+        self.assertEqual(cfg.feed_public_url,
+                         "https://roguepod-litecasst.github.io/podcast-mirror/feed.xml")
+        self.assertEqual(cfg.public_url("state/manifest.json"),
+                         "https://roguepod-litecasst.github.io/podcast-mirror/state/manifest.json")
+
+    def test_release_tag_is_part_of_the_audio_url(self):
+        cfg = Config(feed_url="f", github_repo=self.REPO, release_tag="v2")
+        self.assertTrue(cfg.public_url("audio/x.mp3").endswith("/releases/download/v2/x.mp3"))
+
+    def test_explicit_base_urls_win_and_lose_trailing_slashes(self):
+        cfg = Config(feed_url="f", github_repo=self.REPO,
+                     audio_base_url="https://pub-1.r2.dev/audio/",
+                     feed_base_url="https://mirror.example/")
+        self.assertEqual(cfg.public_url("audio/x.mp3"), "https://pub-1.r2.dev/audio/x.mp3")
+        self.assertEqual(cfg.feed_public_url, "https://mirror.example/feed.xml")
+
+    def test_key_for_url_inverts_public_url_for_audio_only(self):
+        cfg = Config(feed_url="f", github_repo=self.REPO)
+        key = "audio/ep-abc123.mp3"
+        self.assertEqual(cfg.key_for_url(cfg.public_url(key)), key)
+        self.assertIsNone(cfg.key_for_url("https://sphinx.acast.com/x/media.mp3"))
+        self.assertIsNone(cfg.key_for_url(cfg.feed_public_url))
+        self.assertIsNone(cfg.key_for_url(cfg.audio_base_url + "/"))
+
+    def test_no_repo_and_no_base_urls_is_a_clear_error(self):
+        cfg = Config(feed_url="f")
+        with self.assertRaises(ConfigError) as ctx:
+            cfg.public_url("audio/x.mp3")
+        self.assertIn("GITHUB_REPOSITORY", str(ctx.exception))
+
+    def test_malformed_repo_is_rejected_up_front(self):
+        with self.assertRaises(ConfigError):
+            Config(feed_url="f", github_repo="just-a-name")
+
+    def test_manifest_lives_under_state_by_default(self):
+        cfg = Config(feed_url="f", github_repo=self.REPO)
+        self.assertEqual(cfg.manifest_key, "state/manifest.json")
+
+    def test_token_stays_out_of_repr(self):
+        cfg = Config(feed_url="f", github_repo=self.REPO, github_token="ghp_SUPERSECRET")
+        self.assertNotIn("SUPERSECRET", repr(cfg))
+
+
 class EndpointConfigTest(unittest.TestCase):
-    """The storage backend must work against any S3-compatible provider."""
+    """The S3 fallback (Cloudflare R2) must still configure cleanly."""
 
     def test_explicit_endpoint_wins(self):
-        cfg = Config(feed_url="f", bucket="b", base_url="https://x.test",
+        cfg = Config(feed_url="f", bucket="b",
                      endpoint="https://la-s3.storage.bunnycdn.com", account_id="acct")
         self.assertEqual(cfg.endpoint_url, "https://la-s3.storage.bunnycdn.com")
 
     def test_endpoint_trailing_slash_stripped(self):
-        cfg = Config(feed_url="f", bucket="b", base_url="https://x.test",
-                     endpoint="https://la-s3.storage.bunnycdn.com/")
+        cfg = Config(feed_url="f", bucket="b", endpoint="https://la-s3.storage.bunnycdn.com/")
         self.assertEqual(cfg.endpoint_url, "https://la-s3.storage.bunnycdn.com")
 
     def test_falls_back_to_r2_from_account_id(self):
-        cfg = Config(feed_url="f", bucket="b", base_url="https://x.test", account_id="acct123")
+        cfg = Config(feed_url="f", bucket="b", account_id="acct123")
         self.assertEqual(cfg.endpoint_url, "https://acct123.r2.cloudflarestorage.com")
 
     def test_no_endpoint_is_a_clear_config_error(self):
-        cfg = Config(feed_url="f", bucket="b", base_url="https://x.test")
+        cfg = Config(feed_url="f", bucket="b")
         with self.assertRaises(ConfigError) as ctx:
             cfg.endpoint_url
         self.assertIn("STORAGE_ENDPOINT_URL", str(ctx.exception))
 
     def test_missing_credentials_named_precisely(self):
-        cfg = Config(feed_url="f", bucket="b", base_url="https://x.test",
-                     endpoint="https://la-s3.storage.bunnycdn.com")
+        cfg = Config(feed_url="f", endpoint="https://la-s3.storage.bunnycdn.com")
         with self.assertRaises(ConfigError) as ctx:
             cfg.require_credentials()
+        self.assertIn("STORAGE_BUCKET", str(ctx.exception))
         self.assertIn("STORAGE_ACCESS_KEY_ID", str(ctx.exception))
 
     def test_credentials_stay_out_of_repr(self):
-        cfg = Config(feed_url="f", bucket="b", base_url="https://x.test",
+        cfg = Config(feed_url="f", bucket="b",
                      access_key_id="zone-name", secret_access_key="SUPERSECRET")
         self.assertNotIn("SUPERSECRET", repr(cfg))
 
