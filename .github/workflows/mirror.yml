@@ -11,10 +11,21 @@ on:
         type: boolean
         default: false
 
+# The built-in token is the only credential. contents:write covers both the
+# release-asset uploads and the push of feed.xml + state/manifest.json.
+permissions:
+  contents: write
+
 # Never let two runs mirror the same episode at once.
 concurrency:
   group: podcast-mirror
   cancel-in-progress: false
+
+env:
+  # The public Acast feed; not a secret. Set a repo variable to override.
+  PODCAST_FEED_URL: ${{ vars.PODCAST_FEED_URL || 'https://feeds.acast.com/public/shows/roguepod-litecast' }}
+  # GITHUB_REPOSITORY is set by Actions; the token is read from the same env.
+  GITHUB_TOKEN: ${{ github.token }}
 
 jobs:
   mirror:
@@ -31,25 +42,49 @@ jobs:
       - run: pip install -r requirements.txt
 
       - name: Mirror new episodes
-        env:
-          PODCAST_FEED_URL: ${{ secrets.PODCAST_FEED_URL }}
-          STORAGE_BUCKET: ${{ secrets.STORAGE_BUCKET }}
-          STORAGE_PUBLIC_BASE_URL: ${{ secrets.STORAGE_PUBLIC_BASE_URL }}
-          STORAGE_ENDPOINT_URL: ${{ secrets.STORAGE_ENDPOINT_URL }}
-          STORAGE_REGION: ${{ secrets.STORAGE_REGION }}
-          STORAGE_ACCESS_KEY_ID: ${{ secrets.STORAGE_ACCESS_KEY_ID }}
-          STORAGE_SECRET_ACCESS_KEY: ${{ secrets.STORAGE_SECRET_ACCESS_KEY }}
+        # Non-backfill runs are capped at --max-new 10 (the default) so a
+        # surprise backlog can't blow the job timeout.
+        run: python mirror.py ${{ inputs.dry_run && '--dry-run' || '' }}
+
+      - name: Commit feed.xml and manifest
+        # Runs even if the mirror step failed part-way: every episode that did
+        # upload is already in the manifest, and committing it is what stops
+        # the next run from re-downloading and re-uploading them.
+        if: ${{ !cancelled() && !inputs.dry_run }}
         run: |
-          python mirror.py ${{ inputs.dry_run && '--dry-run' || '' }}
+          for f in feed.xml state/manifest.json; do
+            [ -f "$f" ] && git add -- "$f"
+          done
+          if git diff --cached --quiet; then
+            echo "Nothing changed; nothing to publish."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Mirror: update feed.xml and manifest"
+          # A push made with GITHUB_TOKEN does not trigger another run.
+          git push
+
+      - name: Wait for GitHub Pages to publish feed.xml
+        # Pages is "deploy from branch", so the push above republishes, but
+        # not instantly. Poll until the live feed matches the committed file
+        # so verify doesn't assert against the previous run's feed.
+        if: ${{ !cancelled() && !inputs.dry_run }}
+        env:
+          FEED_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/feed.xml
+        run: |
+          for attempt in $(seq 1 30); do
+            if curl -fsSL --retry 0 -o /tmp/live-feed.xml "$FEED_URL" \
+               && cmp -s /tmp/live-feed.xml feed.xml; then
+              echo "Live feed matches the committed feed.xml (attempt $attempt)."
+              exit 0
+            fi
+            echo "Live feed not updated yet (attempt $attempt/30); waiting 10s."
+            sleep 10
+          done
+          echo "::error::Pages did not publish the committed feed.xml within 5 minutes."
+          exit 1
 
       - name: Verify the published mirror
-        if: ${{ !inputs.dry_run }}
-        env:
-          PODCAST_FEED_URL: ${{ secrets.PODCAST_FEED_URL }}
-          STORAGE_BUCKET: ${{ secrets.STORAGE_BUCKET }}
-          STORAGE_PUBLIC_BASE_URL: ${{ secrets.STORAGE_PUBLIC_BASE_URL }}
-          STORAGE_ENDPOINT_URL: ${{ secrets.STORAGE_ENDPOINT_URL }}
-          STORAGE_REGION: ${{ secrets.STORAGE_REGION }}
-          STORAGE_ACCESS_KEY_ID: ${{ secrets.STORAGE_ACCESS_KEY_ID }}
-          STORAGE_SECRET_ACCESS_KEY: ${{ secrets.STORAGE_SECRET_ACCESS_KEY }}
+        if: ${{ !cancelled() && !inputs.dry_run }}
         run: python mirror.py verify

@@ -440,6 +440,15 @@ class VerifyTest(unittest.TestCase):
         self.assertIn("Content-Type", str(ctx.exception))
         self.assertIn("text/plain", str(ctx.exception))
 
+    def test_verification_rejects_an_html_feed(self):
+        # Accepting application/xml (Pages) must not let an error page through.
+        body, _ = self.world.storage.objects["feed.xml"]
+        self.world.storage.objects["feed.xml"] = (body, "text/html")
+        with self.assertRaises(verify_mod.VerificationError) as ctx:
+            verify_mod.verify(self.cfg, storage=self.world.storage, sample=3)
+        self.assertIn("feed.xml Content-Type", str(ctx.exception))
+        self.assertIn("text/html", str(ctx.exception))
+
 
 class VerifyOnGitHubTest(unittest.TestCase):
     """verify.py against a fake GitHub release, which serves octet-stream."""
@@ -454,9 +463,10 @@ class VerifyOnGitHubTest(unittest.TestCase):
         self.cfg = self.world.config(self.tmp, audio_base_url=f"{self.gh.download_base}/audio")
         self.storage = self.gh.storage(self.tmp)
         run(self.cfg, storage=self.storage, backfill=True)
-        # Stand in for Pages: publish the committed feed.xml at feed_base_url.
+        # Stand in for Pages: publish the committed feed.xml at feed_base_url,
+        # with the application/xml type Pages gives .xml files.
         with open(os.path.join(self.tmp, "feed.xml"), "rb") as fh:
-            self.world.storage.objects["feed.xml"] = (fh.read(), "application/rss+xml")
+            self.world.storage.objects["feed.xml"] = (fh.read(), "application/xml; charset=utf-8")
 
     def test_octet_stream_audio_passes_and_is_recorded(self):
         with self.assertLogs(verify_mod.log, level="WARNING") as captured:

@@ -201,6 +201,26 @@ the built-in `GITHUB_TOKEN`, and after the mirror step commit `feed.xml` and
 `concurrency` group, the `workflow_dispatch` dry-run input, and the verify step.
 Pages set to "deploy from branch", so the push publishes.
 
+> **Done (2026-09-11).** `permissions: contents: write`; the only credential
+> is `${{ github.token }}` exported as `GITHUB_TOKEN`. `PODCAST_FEED_URL`
+> defaults to the public Acast URL in the workflow itself (overridable via a
+> repo *variable*, not a secret). Steps after the mirror: commit
+> `feed.xml` + `state/manifest.json` as `github-actions[bot]` and push
+> (skipped when nothing changed; runs even if the mirror step failed
+> part-way so already-uploaded episodes aren't re-mirrored next run); poll
+> the Pages feed URL for up to 5 minutes until its bytes equal the committed
+> `feed.xml` (Pages publishes asynchronously after the push, and verify
+> would otherwise assert against the previous run's feed); then
+> `mirror.py verify`. Cron, concurrency group and the dry-run dispatch input
+> are unchanged; dry runs skip all three post-mirror steps. Also resolved
+> the task-3 flag: `verify.FEED_CONTENT_TYPES` accepts `application/rss+xml`,
+> `application/xml` or `text/xml` (Pages serves `.xml` as `application/xml`);
+> `text/html` still fails. `VerifyOnGitHubTest` now serves the feed as
+> `application/xml; charset=utf-8` like Pages does, plus a new HTML-rejection
+> case. 63 tests pass. Not verifiable offline: the workflow has to run once
+> in the real repo (Stage 1) — that's also when Pages must be enabled with
+> source "deploy from branch", root `/`.
+
 ### 7. `README.md`
 
 Rewrite. The current one is largely Bunny.net setup and DNS instructions that no

@@ -33,6 +33,11 @@ log = logging.getLogger(__name__)
 # text/html) is the placeholder/error page this project exists to avoid.
 AUDIO_CONTENT_TYPES = ("audio/mpeg", "application/octet-stream")
 
+# What feed.xml may answer with. GitHub Pages serves .xml as application/xml;
+# an S3-style host echoes the application/rss+xml it was uploaded with. Any
+# text/html is a 404/error page that happened to return 200.
+FEED_CONTENT_TYPES = ("application/rss+xml", "application/xml", "text/xml")
+
 
 @dataclass
 class Checks:
@@ -162,8 +167,8 @@ def verify(cfg, storage=None, sample: int = 3) -> Checks:
 
     checks.check(feed_status == 200, "feed.xml returns 200", f"got {feed_status}")
     checks.check(
-        feed_ct == "application/rss+xml",
-        "feed.xml Content-Type is application/rss+xml",
+        feed_ct in FEED_CONTENT_TYPES,
+        "feed.xml Content-Type is an XML type",
         f"got {feed_ct!r}",
     )
 

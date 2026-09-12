@@ -7,7 +7,7 @@
 - [x] 3. verify.py — accept audio/mpeg OR application/octet-stream, log which came back
 - [x] 4. pipeline.py — add --keep-downloads flag
 - [x] 5. requirements.txt — boto3 becomes optional extra
-- [ ] 6. .github/workflows/mirror.yml — GITHUB_TOKEN only, commit feed.xml + state/manifest.json back
+- [x] 6. .github/workflows/mirror.yml — GITHUB_TOKEN only, commit feed.xml + state/manifest.json back
 - [ ] 7. README.md — rewrite for GitHub hosting
 - [ ] Rollout Stage 1 (manual: create GitHub repo, enable Pages, --max-new 1, submit to YouTube)
 
@@ -107,3 +107,25 @@
   commit feed.xml + state/manifest.json back after mirror; keep cron/concurrency/dispatch dry-run/
   verify). Remember the task-3 flag: verify.py's feed Content-Type check must also accept
   application/xml and text/xml since Pages serves .xml as application/xml.
+2026-09-11 — Task 6 done. .github/workflows/mirror.yml rewritten: permissions contents: write; env at
+  workflow level sets GITHUB_TOKEN=${{ github.token }} and PODCAST_FEED_URL from vars.PODCAST_FEED_URL
+  with the public Acast URL as the literal default (no secrets at all). Post-mirror steps, all
+  `if: !cancelled() && !inputs.dry_run`: (1) git add feed.xml state/manifest.json (guarded with
+  [ -f ] so a run that died before writing either doesn't fatal on the pathspec), commit as
+  github-actions[bot], push — runs even when the mirror step exited 1 on a partial failure, since
+  the manifest already records the episodes that did upload; (2) poll the Pages URL up to 30x10s
+  until `cmp` says the live feed.xml equals the committed one — without this verify would race the
+  Pages deploy and check last run's feed; (3) mirror.py verify. Pushes with GITHUB_TOKEN don't
+  trigger workflows, so no [skip ci] needed. Resolved the task-3 flag: verify.FEED_CONTENT_TYPES =
+  (application/rss+xml, application/xml, text/xml); VerifyOnGitHubTest's Pages stand-in now serves
+  "application/xml; charset=utf-8"; new VerifyTest.test_verification_rejects_an_html_feed. 63 pass.
+  YAML parse check, bash -n, and pyflakes were all denied under afk permission mode (not blocking,
+  but the YAML has only been eyeballed — first real run in Stage 1 is the test).
+  Known limitation: the Pages-wait step derives the feed URL from github.repository_owner/name; if
+  FEED_PUBLIC_BASE_URL is ever overridden (R2 fallback for the feed too) that step needs the same
+  override.
+  NEXT: task 7 (README.md rewrite for GitHub hosting; keep the "problem this solves" HEAD/length
+  section). Then Stage 1 is manual: create roguepod-litecasst/podcast-mirror (public), push, enable
+  Pages (deploy from branch main, /), run `python mirror.py --max-new 1` locally or via
+  workflow_dispatch, check the Actions log NOTE line for the audio content-type, submit feed to
+  YouTube.
