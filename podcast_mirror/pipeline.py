@@ -33,11 +33,16 @@ class RunResult:
         return 1 if self.failed else 0
 
 
-def _mirror_one(item: SourceItem, cfg, storage, manifest: Manifest) -> Episode:
+def _mirror_one(item: SourceItem, cfg, storage, manifest: Manifest,
+                *, keep_downloads: bool = False) -> Episode:
     """Download, validate, upload, and record one episode.
 
     The manifest is written only after the audio object is in storage, so an
     interrupted run never claims an episode it did not actually mirror.
+
+    With ``keep_downloads`` the validated MP3 stays in ``cfg.download_dir``
+    after upload, so a later move to different storage can re-upload from
+    disk instead of pulling ~2.4 GB from Acast again.
     """
     key = audio_key(cfg, item.guid)
     dest = os.path.join(cfg.download_dir, os.path.basename(key))
@@ -80,14 +85,18 @@ def _mirror_one(item: SourceItem, cfg, storage, manifest: Manifest) -> Episode:
     log.info("  recorded in manifest (%s bytes, sha256 %s...)",
              f"{result.length:,}", result.sha256[:12])
 
-    try:
-        os.unlink(result.path)
-    except OSError:
-        pass
+    if keep_downloads:
+        log.info("  kept local copy at %s", result.path)
+    else:
+        try:
+            os.unlink(result.path)
+        except OSError:
+            pass
     return episode
 
 
-def run(cfg, *, dry_run: bool = False, backfill: bool = False, storage=None) -> RunResult:
+def run(cfg, *, dry_run: bool = False, backfill: bool = False,
+        keep_downloads: bool = False, storage=None) -> RunResult:
     """Execute one mirror pass."""
     storage = storage if storage is not None else GitHubStorage.from_config(cfg)
     feed = load_source(cfg)
@@ -113,7 +122,7 @@ def run(cfg, *, dry_run: bool = False, backfill: bool = False, storage=None) -> 
     failed: List[str] = []
     for index, item in enumerate(pending):
         try:
-            _mirror_one(item, cfg, storage, manifest)
+            _mirror_one(item, cfg, storage, manifest, keep_downloads=keep_downloads)
             mirrored.append(item.title)
         except MirrorError as exc:
             # Loud, named, and fatal to the exit code -- but we keep going so

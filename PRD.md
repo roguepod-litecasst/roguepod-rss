@@ -175,6 +175,13 @@ Add a `--keep-downloads` flag that skips the `os.unlink(result.path)` after
 upload. The 2.4 GB backfill should keep local copies so that switching to R2
 later never means re-downloading from Acast. Everything else stays.
 
+> **Done (2026-09-11).** `run(cfg, ..., keep_downloads=False)` threads through
+> to `_mirror_one`, which logs `kept local copy at <path>` instead of
+> unlinking. `cli.py` adds `--keep-downloads` to the `mirror` subcommand.
+> Tests: `test_downloads_are_deleted_after_upload_by_default` and
+> `test_keep_downloads_leaves_verified_mp3s_on_disk` (the kept file's size and
+> sha256 match the manifest entry). 62 tests pass.
+
 ### 5. `requirements.txt`
 
 Drop `boto3` to an extra (only needed for the R2 fallback); keep `lxml`.

@@ -5,7 +5,7 @@
 - [x] 1. storage.py — add GitHubStorage (audio/ -> release assets, else local file); keep S3Storage
 - [x] 2. config.py — github_repo/github_token/release_tag; split base_url into audio_base_url + feed_base_url
 - [x] 3. verify.py — accept audio/mpeg OR application/octet-stream, log which came back
-- [ ] 4. pipeline.py — add --keep-downloads flag
+- [x] 4. pipeline.py — add --keep-downloads flag
 - [ ] 5. requirements.txt — boto3 becomes optional extra
 - [ ] 6. .github/workflows/mirror.yml — GITHUB_TOKEN only, commit feed.xml + state/manifest.json back
 - [ ] 7. README.md — rewrite for GitHub hosting
@@ -87,3 +87,13 @@
   relax it (accept application/xml, text/xml, application/rss+xml) when wiring the workflow.
   NEXT: task 4 (pipeline.py --keep-downloads: skip os.unlink(result.path) after upload; thread
   through cli.py and Config or a run() kwarg).
+2026-09-11 — Task 4 done. Went with a run() kwarg rather than a Config field (it's a per-invocation
+  choice, not a deployment setting): run(cfg, keep_downloads=False) -> _mirror_one(...,
+  keep_downloads=) which logs "kept local copy at <path>" instead of unlinking. cli.py:
+  --keep-downloads on the mirror subcommand only, passed straight to run(). Tests: 2 new in
+  PipelineTest (default deletes the scratch file; keep_downloads leaves it with size + sha256
+  matching the manifest). 62 pass. pyflakes and `mirror.py --help` denied under afk permission
+  mode again (not blocking).
+  NEXT: task 5 (requirements.txt: boto3 -> optional extra, keep lxml). Check storage.py imports
+  boto3 lazily inside S3Storage so the GitHub path works without it; cli.py still silences the
+  botocore/boto3/s3transfer loggers, which is harmless but could go with the same commit.

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import os
 import tempfile
 import unittest
@@ -79,6 +80,26 @@ class PipelineTest(unittest.TestCase):
             "mirroring episodes must report the manifest as uploaded",
         )
         self.assertIn(self.cfg.manifest_key, self.world.storage.writes)
+
+    def _download_paths(self):
+        return [os.path.join(self.cfg.download_dir, os.path.basename(audio_key(self.cfg, ep["guid"])))
+                for ep in EPISODES]
+
+    def test_downloads_are_deleted_after_upload_by_default(self):
+        self._run(backfill=True)
+        for path in self._download_paths():
+            self.assertFalse(os.path.exists(path), f"{path} survived the upload")
+
+    def test_keep_downloads_leaves_verified_mp3s_on_disk(self):
+        result = self._run(backfill=True, keep_downloads=True)
+        self.assertEqual(result.exit_code, 0)
+        manifest = Manifest.load(self.world.storage, self.cfg)
+        for ep, path in zip(EPISODES, self._download_paths()):
+            self.assertTrue(os.path.exists(path), f"{path} was deleted despite --keep-downloads")
+            with open(path, "rb") as fh:
+                data = fh.read()
+            self.assertEqual(len(data), ep["size"])
+            self.assertEqual(hashlib.sha256(data).hexdigest(), manifest.get(ep["guid"]).sha256)
 
     def test_length_is_measured_not_trusted(self):
         """The feed's @length is wrong (or 0); we publish the real byte count."""

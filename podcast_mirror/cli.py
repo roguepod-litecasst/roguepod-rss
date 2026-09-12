@@ -44,6 +44,9 @@ def _parser() -> argparse.ArgumentParser:
                           help="Report what would happen; touch nothing")
     mirror_p.add_argument("--backfill", action="store_true",
                           help="Mirror every episode (initial run; do this locally)")
+    mirror_p.add_argument("--keep-downloads", action="store_true",
+                          help="Leave downloaded MP3s in --download-dir after upload "
+                               "(use with --backfill so a storage move never re-downloads)")
     mirror_p.add_argument("--delay", type=float,
                           help="Seconds to wait between downloads (default 2.0)")
     mirror_p.add_argument("--max-new", type=int,
@@ -85,7 +88,8 @@ def main(argv=None) -> int:
             log.info("VERIFIED: the published mirror is correct.")
             return 0
 
-        result = run(cfg, dry_run=args.dry_run, backfill=args.backfill)
+        result = run(cfg, dry_run=args.dry_run, backfill=args.backfill,
+                     keep_downloads=args.keep_downloads)
         if args.dry_run:
             log.info("Dry run complete; nothing was changed.")
             return 0
