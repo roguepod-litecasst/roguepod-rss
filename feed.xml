@@ -1,5 +1,6 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <rss xmlns:atom="http://www.w3.org/2005/Atom" xmlns:googleplay="http://www.google.com/schemas/play-podcasts/1.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd" xmlns:media="http://search.yahoo.com/mrss/" xmlns:podaccess="https://access.acast.com/schema/1.0/" xmlns:acast="https://schema.acast.com/1.0/" version="2.0">
+   <script xmlns="http://www.w3.org/1999/xhtml" src="https://feeds.acast.com/global/feed/xslt-polyfill.min.js"/>
     <channel>
 		<ttl>60</ttl>
 		<generator>acast.com</generator>
