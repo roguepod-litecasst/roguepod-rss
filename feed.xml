@@ -39,6 +39,24 @@
 		</itunes:category>
     	<itunes:category text="Technology"/>
     <item>
+			<title>Halls of Torment</title>
+			<itunes:title>Halls of Torment</itunes:title>
+			<pubDate>Wed, 30 Sep 2026 09:00:00 GMT</pubDate>
+			<itunes:duration>1:30:43</itunes:duration>
+			<enclosure url="https://github.com/roguepod-litecasst/roguepod-rss/releases/download/audio/6abab161f4720dfefb277742-fe6f4b2e21cf.mp3" length="43551596" type="audio/mpeg"/>
+			<guid isPermaLink="false">6abab161f4720dfefb277742</guid>
+			<itunes:explicit>true</itunes:explicit>
+			<link>https://shows.acast.com/roguepod-litecast/episodes/6abab161f4720dfefb277742</link>
+			<acast:episodeId>6abab161f4720dfefb277742</acast:episodeId>
+			<acast:showId>670c223adf4dd6f896322012</acast:showId>
+			<acast:settings>FYjHyZbXWHZ7gmX8Pp1rmRbkUlg2iR8fDtnl1O71B2N8B7jZZH+7YdsHlGFxMJ/JB5ewwSWwnDfITsERRlXnRPdjbJm7d4qQ2rUK1Oh2E65gYDhVAjVZ14DHwOhC8Pz9i+jargxr+Z+jVE9yJC778zhTQHU6gZEVV13nQX7pAdNB4u1MbNygBgy4VtStsTGZDTm4svZmzStw+pmjnI3CvOgEYCeyzpVLnjsBQ+09vH/2foi4bWP4RGrzXJxHn6upKP0TcGgt+YlwEGFkO72nCrmCS0WJQiC2+iW/5DUInJr6DNhHRvf1khdHRsDDoNO0FR1FqqFqdotmDcUY1URBHk5fZgK7etxbKiGXOsvVr34=</acast:settings>
+			<itunes:episodeType>full</itunes:episodeType>
+			<itunes:episode>52</itunes:episode>
+			<itunes:image href="https://assets.pippa.io/shows/670c223adf4dd6f896322012/1729130174201-972fcc81-73bd-4051-a4e8-0d9c6c14e1fa.jpeg"/>
+			<description>&lt;p&gt;This week on RoguePod LiteCast we’re playing the Diablo style survivors like Halls of Torment and adding it to the ultimate roguelite tier list!&lt;/p&gt;&lt;br&gt;&lt;p&gt;Join the RoguePod LiteCast Discord! https://discord.gg/EEwq9VGGKb&lt;/p&gt;&lt;br&gt;&lt;p&gt;Check out the full tier list at roguepod.show!&lt;/p&gt;&lt;p&gt;Join the RoguePod LiteCast patreon for monthly bonus episodes! &lt;a href="https://www.patreon.com/roguepod" rel="noopener noreferrer" target="_blank"&gt;https://www.patreon.com/roguepod&lt;/a&gt;&lt;/p&gt;&lt;hr&gt;&lt;p style='color:grey; font-size:0.75em;'&gt; Hosted on Acast. See &lt;a style='color:grey;' target='_blank' rel='noopener noreferrer' href='https://acast.com/privacy'&gt;acast.com/privacy&lt;/a&gt; for more information.&lt;/p&gt;</description>
+			<itunes:summary>&lt;p&gt;This week on RoguePod LiteCast we’re playing the Diablo style survivors like Halls of Torment and adding it to the ultimate roguelite tier list!&lt;/p&gt;&lt;br&gt;&lt;p&gt;Join the RoguePod LiteCast Discord! https://discord.gg/EEwq9VGGKb&lt;/p&gt;&lt;br&gt;&lt;p&gt;Check out the full tier list at roguepod.show!&lt;/p&gt;&lt;p&gt;Join the RoguePod LiteCast patreon for monthly bonus episodes! &lt;a href="https://www.patreon.com/roguepod" rel="noopener noreferrer" target="_blank"&gt;https://www.patreon.com/roguepod&lt;/a&gt;&lt;/p&gt;&lt;hr&gt;&lt;p style='color:grey; font-size:0.75em;'&gt; Hosted on Acast. See &lt;a style='color:grey;' target='_blank' rel='noopener noreferrer' href='https://acast.com/privacy'&gt;acast.com/privacy&lt;/a&gt; for more information.&lt;/p&gt;</itunes:summary>
+		</item>
+		<item>
 			<title>Deep Rock Galactic: Survivor</title>
 			<itunes:title>Deep Rock Galactic: Survivor</itunes:title>
 			<pubDate>Wed, 16 Sep 2026 09:00:00 GMT</pubDate>
