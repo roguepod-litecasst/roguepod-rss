@@ -6,6 +6,7 @@ import hashlib
 import os
 import tempfile
 import unittest
+from unittest import mock
 
 from lxml import etree as ET
 
@@ -486,6 +487,28 @@ class VerifyOnGitHubTest(unittest.TestCase):
         with self.assertRaises(verify_mod.VerificationError) as ctx:
             verify_mod.verify(self.cfg, storage=self.storage, sample=3)
         self.assertIn("length", str(ctx.exception).lower())
+
+    def test_a_transient_500_on_download_is_retried(self):
+        self.gh.fail_next_download = 1
+        with mock.patch.object(verify_mod, "_RETRY_DELAY", 0):
+            checks = verify_mod.verify(self.cfg, storage=self.storage, sample=3)
+        self.assertEqual(checks.failures, [])
+        self.assertEqual(self.gh.fail_next_download, 0)
+
+    def test_a_persistent_500_still_fails(self):
+        self.gh.fail_next_download = 100
+        with mock.patch.object(verify_mod, "_RETRY_DELAY", 0):
+            with self.assertRaises(verify_mod.VerificationError) as ctx:
+                verify_mod.verify(self.cfg, storage=self.storage, sample=3)
+        self.assertIn("HTTP 500", str(ctx.exception))
+
+    def test_a_missing_asset_is_not_retried(self):
+        self.gh.release["tag_name"] = "gone"  # every download now 404s
+        with mock.patch.object(verify_mod.time, "sleep") as sleep:
+            with self.assertRaises(verify_mod.VerificationError) as ctx:
+                verify_mod.verify(self.cfg, storage=self.storage, sample=3)
+        self.assertIn("HTTP 404", str(ctx.exception))
+        sleep.assert_not_called()
 
 
 if __name__ == "__main__":

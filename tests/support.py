@@ -222,6 +222,7 @@ class FakeGitHub:
         self.assets = {}          # asset id -> {"name", "size", "content_type", "body"}
         self.requests = []        # (method, path) for every API call
         self.fail_next_upload = 0  # count of uploads to answer with 502
+        self.fail_next_download = 0  # count of public downloads to answer with 500
         self._next_id = 100
         self._lock = threading.Lock()
 
@@ -297,6 +298,10 @@ class FakeGitHub:
                     tag, _, name = path[len("/download/"):].partition("/")
                     if gh.release is None or tag != gh.release["tag_name"]:
                         return self._json(404, {"message": "Not Found"})
+                    with gh._lock:
+                        if gh.fail_next_download:
+                            gh.fail_next_download -= 1
+                            return self._json(500, {"message": "Server Error"})
                     self.send_response(302)
                     self.send_header("Location", f"{gh.base}/blob/{name}")
                     self.send_header("Content-Length", "0")

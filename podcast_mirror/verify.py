@@ -14,6 +14,7 @@ answer to the PRD's open question.
 from __future__ import annotations
 
 import logging
+import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
@@ -77,11 +78,33 @@ class _KeepMethodRedirectHandler(urllib.request.HTTPRedirectHandler):
 _opener = urllib.request.build_opener(_KeepMethodRedirectHandler)
 
 
+_ATTEMPTS = 3       # per request; GitHub downloads occasionally 500 once
+_RETRY_DELAY = 2.0  # seconds, multiplied by the attempt number
+
+
 def _request(url: str, cfg, method: str = "GET", headers: Optional[dict] = None):
+    """Open ``url``, retrying server-side (5xx) and connection failures.
+
+    GitHub's download endpoint occasionally answers a single request with a
+    500 for an asset that is fine; one such blip should not fail the run. A
+    4xx (e.g. a missing asset's 404) is a real answer and is not retried.
+    """
     request = urllib.request.Request(
         url, method=method, headers={"User-Agent": cfg.user_agent, **(headers or {})}
     )
-    return _opener.open(request, timeout=cfg.timeout)
+    for attempt in range(1, _ATTEMPTS + 1):
+        try:
+            return _opener.open(request, timeout=cfg.timeout)
+        except urllib.error.HTTPError as exc:
+            if exc.code < 500 or attempt == _ATTEMPTS:
+                raise
+            reason = f"HTTP {exc.code}"
+        except urllib.error.URLError as exc:
+            if attempt == _ATTEMPTS:
+                raise
+            reason = str(exc)
+        log.warning("  %s %s failed (%s); retrying", method, url, reason)
+        time.sleep(_RETRY_DELAY * attempt)
 
 
 def verify(cfg, storage=None, sample: int = 3) -> Checks:
