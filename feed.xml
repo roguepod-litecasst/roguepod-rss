@@ -39,6 +39,24 @@
 		</itunes:category>
     	<itunes:category text="Technology"/>
     <item>
+			<title>Nubby's Number Factory</title>
+			<itunes:title>Nubby's Number Factory</itunes:title>
+			<pubDate>Wed, 28 Oct 2026 09:00:00 GMT</pubDate>
+			<itunes:duration>1:44:17</itunes:duration>
+			<enclosure url="https://github.com/roguepod-litecasst/roguepod-rss/releases/download/audio/6ae13b90664593f80634f74c-984798fda875.mp3" length="50062368" type="audio/mpeg"/>
+			<guid isPermaLink="false">6ae13b90664593f80634f74c</guid>
+			<itunes:explicit>true</itunes:explicit>
+			<link>https://shows.acast.com/roguepod-litecast/episodes/6ae13b90664593f80634f74c</link>
+			<acast:episodeId>6ae13b90664593f80634f74c</acast:episodeId>
+			<acast:showId>670c223adf4dd6f896322012</acast:showId>
+			<acast:settings>FYjHyZbXWHZ7gmX8Pp1rmRbkUlg2iR8fDtnl1O71B2N8B7jZZH+7YdsHlGFxMJ/JB5ewwSWwnDfITsERRlXnRPdjbJm7d4qQ2rUK1Oh2E65gYDhVAjVZ14DHwOhC8Pz9i+jargxr+Z+jVE9yJC778zhTQHU6gZEVV13nQX7pAdNB4u1MbNygBgy4VtStsTGZDTm4svZmzStw+pmjnI3CvOgEYCeyzpVLnjsBQ+09vH/2foi4bWP4RGrzXJxHn6uplumZ8BCEx5csRfSXfwZbLnbtZ+SnlAOgyxcQz9Pe8kVphnlYQvvncepGYAIZ/a1US/99/vGaiUtetSCC7Fi0VfKzYnIHhk6hd/SRz3aab1k=</acast:settings>
+			<itunes:episodeType>full</itunes:episodeType>
+			<itunes:episode>54</itunes:episode>
+			<itunes:image href="https://assets.pippa.io/shows/670c223adf4dd6f896322012/1793146403224-baaa0e5d-de87-46cc-ad07-e3d22aa57fab.jpeg"/>
+			<description>&lt;p&gt;This week we cover the goofy plinko-style roguelite Nubby&amp;#39;s Number Factory and add it to the tier list. We poke around MogDogBlog and relish being done with Survivors September!&lt;/p&gt;&lt;br&gt;&lt;p&gt;Join the RoguePod LiteCast Discord! &lt;a href="https://discord.gg/EEwq9VGGKb" rel="noopener noreferrer" target="_blank"&gt;https://discord.gg/EEwq9VGGKb&lt;/a&gt;&lt;/p&gt;&lt;br&gt;&lt;p&gt;On this episode we dive deep into Nubby&amp;#39;s Number Factory, a cleverly made plinko-style game in an early 2000&amp;#39;s flash wrapper. There&amp;#39;s some clever mechanics under the hood here, like pegs scaling numerically and items/perks combining to legitimately make some cool builds.&lt;/p&gt;&lt;br&gt;&lt;p&gt;Nubby&amp;#39;s isn&amp;#39;t the deepest game but it is good, simple fun. It embodies a lot of the things we really love about this genre: a tight core gameplay loop with replayability coming from unique builds that let you feel smart when you crack them. Each run feels a bit long and the metagame didn&amp;#39;t entirely click with either of us but we both had a good time pushing for a W and for a game like this, that is plenty good enough.&lt;/p&gt;&lt;p&gt;Join the RoguePod LiteCast patreon for monthly bonus episodes! &lt;a href="https://www.patreon.com/roguepod" rel="noopener noreferrer" target="_blank"&gt;https://www.patreon.com/roguepod&lt;/a&gt;&lt;/p&gt;&lt;hr&gt;&lt;p style='color:grey; font-size:0.75em;'&gt; Hosted on Acast. See &lt;a style='color:grey;' target='_blank' rel='noopener noreferrer' href='https://acast.com/privacy'&gt;acast.com/privacy&lt;/a&gt; for more information.&lt;/p&gt;</description>
+			<itunes:summary>&lt;p&gt;This week we cover the goofy plinko-style roguelite Nubby&amp;#39;s Number Factory and add it to the tier list. We poke around MogDogBlog and relish being done with Survivors September!&lt;/p&gt;&lt;br&gt;&lt;p&gt;Join the RoguePod LiteCast Discord! &lt;a href="https://discord.gg/EEwq9VGGKb" rel="noopener noreferrer" target="_blank"&gt;https://discord.gg/EEwq9VGGKb&lt;/a&gt;&lt;/p&gt;&lt;br&gt;&lt;p&gt;On this episode we dive deep into Nubby&amp;#39;s Number Factory, a cleverly made plinko-style game in an early 2000&amp;#39;s flash wrapper. There&amp;#39;s some clever mechanics under the hood here, like pegs scaling numerically and items/perks combining to legitimately make some cool builds.&lt;/p&gt;&lt;br&gt;&lt;p&gt;Nubby&amp;#39;s isn&amp;#39;t the deepest game but it is good, simple fun. It embodies a lot of the things we really love about this genre: a tight core gameplay loop with replayability coming from unique builds that let you feel smart when you crack them. Each run feels a bit long and the metagame didn&amp;#39;t entirely click with either of us but we both had a good time pushing for a W and for a game like this, that is plenty good enough.&lt;/p&gt;&lt;p&gt;Join the RoguePod LiteCast patreon for monthly bonus episodes! &lt;a href="https://www.patreon.com/roguepod" rel="noopener noreferrer" target="_blank"&gt;https://www.patreon.com/roguepod&lt;/a&gt;&lt;/p&gt;&lt;hr&gt;&lt;p style='color:grey; font-size:0.75em;'&gt; Hosted on Acast. See &lt;a style='color:grey;' target='_blank' rel='noopener noreferrer' href='https://acast.com/privacy'&gt;acast.com/privacy&lt;/a&gt; for more information.&lt;/p&gt;</itunes:summary>
+		</item>
+		<item>
 			<title>Bonus: Two Years of RoguePod LiteCast!</title>
 			<itunes:title>Bonus: Two Years of RoguePod LiteCast!</itunes:title>
 			<pubDate>Wed, 21 Oct 2026 09:00:00 GMT</pubDate>
