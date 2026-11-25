@@ -39,6 +39,24 @@
 		</itunes:category>
     	<itunes:category text="Technology"/>
     <item>
+			<title>Streets of Rogue</title>
+			<itunes:title>Streets of Rogue</itunes:title>
+			<pubDate>Wed, 25 Nov 2026 10:00:00 GMT</pubDate>
+			<itunes:duration>1:46:55</itunes:duration>
+			<enclosure url="https://github.com/roguepod-litecasst/roguepod-rss/releases/download/audio/6b0600112110268582727580-1dd7f46234b2.mp3" length="51326891" type="audio/mpeg"/>
+			<guid isPermaLink="false">6b0600112110268582727580</guid>
+			<itunes:explicit>true</itunes:explicit>
+			<link>https://shows.acast.com/roguepod-litecast/episodes/6b0600112110268582727580</link>
+			<acast:episodeId>6b0600112110268582727580</acast:episodeId>
+			<acast:showId>670c223adf4dd6f896322012</acast:showId>
+			<acast:settings>FYjHyZbXWHZ7gmX8Pp1rmRbkUlg2iR8fDtnl1O71B2N8B7jZZH+7YdsHlGFxMJ/JB5ewwSWwnDfITsERRlXnRPdjbJm7d4qQ2rUK1Oh2E65gYDhVAjVZ14DHwOhC8Pz9i+jargxr+Z+jVE9yJC778zhTQHU6gZEVV13nQX7pAdNB4u1MbNygBgy4VtStsTGZDTm4svZmzStw+pmjnI3CvOgEYCeyzpVLnjsBQ+09vH/2foi4bWP4RGrzXJxHn6upRI38hBYDOuoqM6/SKuKrKX9/1Uuun0zLODB9uS+hfHbNfzo4g9kD9M1WlUH4ICwTpy9U07W9EZTW6OHgmp0tcV6Fmcs24u7LsJlYE8uGrOw=</acast:settings>
+			<itunes:episodeType>full</itunes:episodeType>
+			<itunes:episode>56</itunes:episode>
+			<itunes:image href="https://assets.pippa.io/shows/670c223adf4dd6f896322012/1729130174201-972fcc81-73bd-4051-a4e8-0d9c6c14e1fa.jpeg"/>
+			<description>&lt;p&gt;This week we cover the roguelite meets immersive sim, Streets of Rogue, and add it to the tier list. Streets of Rogue brings a lot of fresh ideas to the table but is it ultimately too simplistic to offer a genuine sandbox experience?&lt;/p&gt;&lt;br&gt;&lt;p&gt;Join the RoguePod LiteCast Discord! &lt;a href="https://discord.gg/EEwq9VGGKb" rel="noopener noreferrer" target="_blank"&gt;https://discord.gg/EEwq9VGGKb&lt;/a&gt;&lt;/p&gt;&lt;br&gt;&lt;p&gt;On this episode we discuss our time playing Streets of Rogue, where the premise is that you accomplish various missions to progress using whatever means possible. This was on our to-play list for a long time as well regarded roguelite. We were impressed by the amount of run to run variance between the different characters, even though this style of metaprogression where you are responsible for the variance up front usually doesn&amp;#39;t click for us. This is a game for anyone who likes sandbox style games as well as action roguelites. If you enjoy games where your own gameplay can turn into novel stories and scenarios, this one is for you!&lt;/p&gt;&lt;p&gt;Join the RoguePod LiteCast patreon for monthly bonus episodes! &lt;a href="https://www.patreon.com/roguepod" rel="noopener noreferrer" target="_blank"&gt;https://www.patreon.com/roguepod&lt;/a&gt;&lt;/p&gt;&lt;hr&gt;&lt;p style='color:grey; font-size:0.75em;'&gt; Hosted on Acast. See &lt;a style='color:grey;' target='_blank' rel='noopener noreferrer' href='https://acast.com/privacy'&gt;acast.com/privacy&lt;/a&gt; for more information.&lt;/p&gt;</description>
+			<itunes:summary>&lt;p&gt;This week we cover the roguelite meets immersive sim, Streets of Rogue, and add it to the tier list. Streets of Rogue brings a lot of fresh ideas to the table but is it ultimately too simplistic to offer a genuine sandbox experience?&lt;/p&gt;&lt;br&gt;&lt;p&gt;Join the RoguePod LiteCast Discord! &lt;a href="https://discord.gg/EEwq9VGGKb" rel="noopener noreferrer" target="_blank"&gt;https://discord.gg/EEwq9VGGKb&lt;/a&gt;&lt;/p&gt;&lt;br&gt;&lt;p&gt;On this episode we discuss our time playing Streets of Rogue, where the premise is that you accomplish various missions to progress using whatever means possible. This was on our to-play list for a long time as well regarded roguelite. We were impressed by the amount of run to run variance between the different characters, even though this style of metaprogression where you are responsible for the variance up front usually doesn&amp;#39;t click for us. This is a game for anyone who likes sandbox style games as well as action roguelites. If you enjoy games where your own gameplay can turn into novel stories and scenarios, this one is for you!&lt;/p&gt;&lt;p&gt;Join the RoguePod LiteCast patreon for monthly bonus episodes! &lt;a href="https://www.patreon.com/roguepod" rel="noopener noreferrer" target="_blank"&gt;https://www.patreon.com/roguepod&lt;/a&gt;&lt;/p&gt;&lt;hr&gt;&lt;p style='color:grey; font-size:0.75em;'&gt; Hosted on Acast. See &lt;a style='color:grey;' target='_blank' rel='noopener noreferrer' href='https://acast.com/privacy'&gt;acast.com/privacy&lt;/a&gt; for more information.&lt;/p&gt;</itunes:summary>
+		</item>
+		<item>
 			<title>Lucky Tower Ultimate</title>
 			<itunes:title>Lucky Tower Ultimate</itunes:title>
 			<pubDate>Wed, 11 Nov 2026 10:00:00 GMT</pubDate>
